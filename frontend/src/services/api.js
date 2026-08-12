@@ -17,9 +17,13 @@ api.interceptors.request.use(config => {
 api.interceptors.response.use(
   res => res,
   err => {
-    if (err.response?.status === 401) {
+    const isAuthCheck = err.config?.url?.includes('/auth/me');
+    if (err.response?.status === 401 && (isAuthCheck || !localStorage.getItem('agridiag_token'))) {
       localStorage.removeItem('agridiag_token');
-      window.location.href = '/login';
+      delete api.defaults.headers.common['Authorization'];
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(err);
   }
@@ -39,7 +43,7 @@ export const diagnosisApi = {
 };
 
 export const historyApi = {
-  list: (skip = 0, limit = 20) => api.get(`/history?skip=${skip}&limit=${limit}`),
+  list: (skip = 0, limit = 20) => api.get(`/history/?skip=${skip}&limit=${limit}`),
   search: (q) => api.get(`/history/search?q=${encodeURIComponent(q)}`),
   filter: (params) => api.get('/history/filter', { params }),
   delete: (id) => api.delete(`/history/${id}`),
@@ -47,7 +51,7 @@ export const historyApi = {
 
 export const plantsApi = {
   list: (search = '', skip = 0, limit = 20) =>
-    api.get('/plants', { params: { search, skip, limit } }),
+    api.get('/plants/', { params: { search, skip, limit } }),
   search: (q) => api.get(`/plants/search?q=${encodeURIComponent(q)}`),
   getById: (id) => api.get(`/plants/${id}`),
   listDiseases: (search = '') => api.get('/plants/diseases/all', { params: { search } }),
@@ -55,6 +59,6 @@ export const plantsApi = {
 };
 
 export const feedbackApi = {
-  submit: (data) => api.post('/feedback', data),
+  submit: (data) => api.post('/feedback/', data),
   myFeedback: () => api.get('/feedback/my'),
 };

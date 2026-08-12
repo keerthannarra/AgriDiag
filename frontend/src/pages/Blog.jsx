@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 const ARTICLES = [
   { id: 1, cat: 'Disease Management', title: 'Understanding Early Blight in Tomatoes', excerpt: 'Early blight, caused by Alternaria solani, is one of the most widespread tomato diseases. Learn how to identify, treat, and prevent this common fungal pathogen.', readTime: '5 min', date: 'Aug 2025', emoji: '🍅' },
   { id: 2, cat: 'Prevention', title: 'Crop Rotation Strategies to Reduce Disease Pressure', excerpt: 'Proper crop rotation is one of the most effective and cost-efficient tools for managing plant diseases. Discover proven rotation plans for small and large farms.', readTime: '7 min', date: 'Jul 2025', emoji: '🔄' },

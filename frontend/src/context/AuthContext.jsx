@@ -14,12 +14,12 @@ export function AuthProvider({ children }) {
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       api.get('/auth/me')
         .then(res => setUser(res.data))
-        .catch(() => { setToken(null); localStorage.removeItem('agridiag_token'); })
+        .catch(() => { setToken(null); localStorage.removeItem('agridiag_token'); delete api.defaults.headers.common['Authorization']; })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   const login = useCallback(async (email, password) => {
     const res = await api.post('/auth/login', { email, password });

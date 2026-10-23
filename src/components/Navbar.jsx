@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './Navbar.css';
 
@@ -20,6 +20,7 @@ const AUTH_NAV_LINKS = [
 
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
+  const { pathname } = useLocation();
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -29,6 +30,7 @@ export default function Navbar() {
     const onResize = () => {
       if (window.innerWidth > 768) setMenuOpen(false);
     };
+    onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onResize);
     return () => {
@@ -36,6 +38,20 @@ export default function Navbar() {
       window.removeEventListener('resize', onResize);
     };
   }, []);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+
+    const onKeyDown = event => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [menuOpen]);
 
   const handleLogout = async () => {
     await logout();
@@ -50,18 +66,14 @@ export default function Navbar() {
   };
 
   return (
-    <nav className={`navbar ${scrolled ? 'navbar-scrolled' : ''}`}>
-      <Link to="/plants" className="navbar-promo">
-        <span>GROW WITH CONFIDENCE</span>
-        <span>Explore the AgriDiag plant library <span aria-hidden="true">→</span></span>
-      </Link>
+    <header className={`navbar ${scrolled ? 'navbar-scrolled' : ''}`}>
       <div className="navbar-inner container">
         <Link to="/" className="navbar-logo" aria-label="AgriDiag home">
           <span className="logo-icon" aria-hidden="true">✿</span>
           <span className="logo-text">Agri<span>Diag</span></span>
         </Link>
 
-        <div className="navbar-links">
+        <nav className="navbar-links" aria-label="Main navigation">
           {(isAuthenticated ? AUTH_NAV_LINKS : NAV_LINKS).map(link => (
             <NavLink
               key={link.to}
@@ -71,7 +83,7 @@ export default function Navbar() {
               {link.label}
             </NavLink>
           ))}
-        </div>
+        </nav>
 
         <div className="navbar-actions">
           {isAuthenticated ? (
@@ -81,13 +93,13 @@ export default function Navbar() {
                   {user?.name?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="user-details">
-                  <span className="user-name">{user?.name}</span>
+                  <span className="user-name">{user?.name || 'Your account'}</span>
                   <span className="user-role" style={{ color: roleColor[user?.role] || '#13856b' }}>
-                    {user?.role}
+                    {user?.role?.replace('_', ' ')}
                   </span>
                 </div>
               </div>
-              <button className="btn btn-outline btn-sm" onClick={handleLogout}>Sign out</button>
+              <button type="button" className="navbar-signout" onClick={handleLogout}>Sign out</button>
             </div>
           ) : (
             <>
@@ -99,9 +111,11 @@ export default function Navbar() {
 
         <button
           className={`hamburger ${menuOpen ? 'open' : ''}`}
+          type="button"
           onClick={() => setMenuOpen(o => !o)}
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={menuOpen}
+          aria-controls="navbar-mobile-menu"
           id="navbar-hamburger"
         >
           <span /><span /><span />
@@ -109,20 +123,34 @@ export default function Navbar() {
       </div>
 
       {menuOpen && (
-        <div className="mobile-menu animate-fade-in">
-          {(isAuthenticated ? AUTH_NAV_LINKS : NAV_LINKS).map(link => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              className="mobile-link"
-              onClick={() => setMenuOpen(false)}
-            >
-              {link.label}
-            </NavLink>
-          ))}
+        <div className="mobile-menu animate-fade-in" id="navbar-mobile-menu">
+          <nav className="mobile-links" aria-label="Mobile navigation">
+            {(isAuthenticated ? AUTH_NAV_LINKS : NAV_LINKS).map(link => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                className="mobile-link"
+                onClick={() => setMenuOpen(false)}
+              >
+                {link.label}
+                <span aria-hidden="true">↗</span>
+              </NavLink>
+            ))}
+          </nav>
+          {isAuthenticated && (
+            <div className="mobile-user">
+              <span className="user-avatar" aria-hidden="true">
+                {user?.name?.[0]?.toUpperCase() || '?'}
+              </span>
+              <span>
+                <strong>{user?.name || 'Your account'}</strong>
+                <small>{user?.role?.replace('_', ' ')}</small>
+              </span>
+            </div>
+          )}
           <div className="mobile-auth">
             {isAuthenticated ? (
-              <button className="btn btn-danger w-full" onClick={handleLogout}>Sign out</button>
+              <button type="button" className="btn btn-outline w-full" onClick={handleLogout}>Sign out</button>
             ) : (
               <>
                 <Link to="/login" className="btn btn-outline w-full" onClick={() => setMenuOpen(false)}>Sign in</Link>
@@ -132,6 +160,6 @@ export default function Navbar() {
           </div>
         </div>
       )}
-    </nav>
+    </header>
   );
 }

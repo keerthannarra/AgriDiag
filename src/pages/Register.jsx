@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import './Auth.css';
 
 const ROLES = [
-  { value: 'FARMER', label: '🌾 Farmer', desc: 'Identify and treat plant diseases on your farm.' },
-  { value: 'SCIENTIST', label: '🔬 Agricultural Scientist', desc: 'Research diseases and analyze agricultural data.' },
-  { value: 'AGRICULTURIST', label: '🌱 Agriculturist', desc: 'Provide expert recommendations and consultations.' },
+  { value: 'FARMER', label: 'Farmer', mark: 'F', desc: 'Identify and treat plant diseases on your farm.' },
+  { value: 'SCIENTIST', label: 'Agricultural Scientist', mark: 'S', desc: 'Research diseases and analyze agricultural data.' },
+  { value: 'AGRICULTURIST', label: 'Agriculturist', mark: 'A', desc: 'Provide expert recommendations and consultations.' },
 ];
 
 export default function Register() {
@@ -15,110 +16,138 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async e => {
-    e.preventDefault();
+  const updateForm = (field, value) => {
+    setForm(current => ({ ...current, [field]: value }));
+    if (error) setError('');
+  };
+
+  const handleSubmit = async event => {
+    event.preventDefault();
     setError('');
-    if (form.password.length < 6) { setError('Password must be at least 6 characters'); return; }
+    if (form.password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
     setLoading(true);
     try {
       await register(form.name, form.email, form.password, form.role);
       navigate('/dashboard');
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Registration failed. Please try again.');
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-orb auth-orb-1" />
-      <div className="auth-orb auth-orb-2" />
-      <div className="auth-card card-glass animate-scale-in" style={{ maxWidth: 520 }}>
-        <div className="auth-header">
-          <Link to="/" className="auth-logo">🌿 AgriDiag</Link>
-          <h1>Create your account</h1>
-          <p>Start diagnosing plant diseases with AI</p>
+    <div className="auth-page auth-page--register">
+      <section className="auth-visual" aria-label="AgriDiag plant health">
+        <img
+          className="auth-visual-image"
+          src="https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=1400&q=85"
+          alt="Sunlight falling across healthy green leaves"
+        />
+        <div className="auth-visual-shade" />
+        <Link to="/" className="auth-brand" aria-label="AgriDiag home">
+          <span className="auth-brand-mark" aria-hidden="true">✿</span>
+          <span>Agri<span>Diag</span></span>
+        </Link>
+        <div className="auth-visual-copy">
+          <span className="auth-eyebrow">GROW WITH MORE CONFIDENCE</span>
+          <h1>Make every observation count.</h1>
+          <p>Create your space to check plant health and keep your field notes close.</p>
         </div>
+        <span className="auth-visual-caption">AGRICULTURE / OBSERVATION / CARE</span>
+      </section>
 
-        {error && <div className="alert alert-error mb-4"><span>⚠️</span> {error}</div>}
-
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label" htmlFor="reg-name">Full name</label>
-            <input id="reg-name" type="text" className="form-input" placeholder="John Doe"
-              value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required />
-          </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="reg-email">Email address</label>
-            <input id="reg-email" type="email" className="form-input" placeholder="you@example.com"
-              value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} required />
-          </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="reg-password">Password</label>
-            <input id="reg-password" type="password" className="form-input" placeholder="Min. 6 characters"
-              value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required />
+      <section className="auth-form-side">
+        <div className="auth-form-card auth-form-card--register">
+          <div className="auth-form-heading">
+            <span className="auth-eyebrow">GET STARTED</span>
+            <h2>Create your account</h2>
+            <p>Tell us a little about yourself to get set up.</p>
           </div>
 
-          {/* Role selection */}
-          <div className="form-group">
-            <label className="form-label">I am a…</label>
-            <div className="role-grid">
-              {ROLES.map(r => (
-                <button
-                  key={r.value}
-                  type="button"
-                  className={`role-card ${form.role === r.value ? 'selected' : ''}`}
-                  onClick={() => setForm(p => ({ ...p, role: r.value }))}
-                >
-                  <span className="role-label">{r.label}</span>
-                  <span className="role-desc">{r.desc}</span>
-                </button>
-              ))}
+          {error && (
+            <div className="auth-error" role="alert">
+              <span aria-hidden="true">!</span>
+              <p>{error}</p>
             </div>
-          </div>
+          )}
 
-          <button type="submit" className="btn btn-primary w-full"
-            style={{ padding: '0.85rem' }} disabled={loading} id="register-submit">
-            {loading ? <><span className="spinner spinner-sm" /> Creating account…</> : 'Create Account'}
-          </button>
-        </form>
+          <form onSubmit={handleSubmit}>
+            <div className="auth-field">
+              <label htmlFor="reg-name">Full name</label>
+              <input
+                id="reg-name"
+                type="text"
+                placeholder="Your name"
+                value={form.name}
+                onChange={event => updateForm('name', event.target.value)}
+                required
+                autoComplete="name"
+              />
+            </div>
+            <div className="auth-field">
+              <label htmlFor="reg-email">Email address</label>
+              <input
+                id="reg-email"
+                type="email"
+                placeholder="you@example.com"
+                value={form.email}
+                onChange={event => updateForm('email', event.target.value)}
+                required
+                autoComplete="email"
+              />
+            </div>
+            <div className="auth-field">
+              <label htmlFor="reg-password">Password</label>
+              <input
+                id="reg-password"
+                type="password"
+                placeholder="At least 6 characters"
+                value={form.password}
+                onChange={event => updateForm('password', event.target.value)}
+                required
+                minLength={6}
+                autoComplete="new-password"
+              />
+              <span className="auth-field-hint">Use at least 6 characters.</span>
+            </div>
 
-        <div className="divider-text" style={{ margin: 'var(--sp-6) 0' }}>Already have an account?</div>
-        <Link to="/login" className="btn btn-outline w-full" style={{ justifyContent: 'center' }}>Sign In</Link>
-      </div>
+            <fieldset className="auth-role-fieldset">
+              <legend>Which best describes you?</legend>
+              <div className="auth-role-grid">
+                {ROLES.map(role => (
+                  <button
+                    key={role.value}
+                    type="button"
+                    className={`auth-role-card ${form.role === role.value ? 'is-selected' : ''}`}
+                    onClick={() => updateForm('role', role.value)}
+                    aria-pressed={form.role === role.value}
+                  >
+                    <span className="auth-role-mark" aria-hidden="true">{role.mark}</span>
+                    <span className="auth-role-copy">
+                      <strong>{role.label}</strong>
+                      <small>{role.desc}</small>
+                    </span>
+                    <span className="auth-role-check" aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            </fieldset>
 
-      <style>{`
-        .auth-page {
-          min-height: 100vh;
-          display: flex; align-items: center; justify-content: center;
-          padding: var(--sp-8) var(--sp-4);
-          position: relative; overflow: hidden;
-        }
-        .auth-orb { position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none; }
-        .auth-orb-1 { width: 400px; height: 400px; background: radial-gradient(circle, rgba(34,197,94,0.1), transparent); top: -100px; left: -100px; }
-        .auth-orb-2 { width: 300px; height: 300px; background: radial-gradient(circle, rgba(245,158,11,0.08), transparent); bottom: -60px; right: -60px; }
-        .auth-card { width: 100%; max-width: 440px; padding: var(--sp-10); position: relative; z-index: 1; }
-        .auth-header { text-align: center; margin-bottom: var(--sp-8); }
-        .auth-logo { font-family: var(--font-heading); font-size: 1.5rem; font-weight: 800; color: var(--color-primary); display: block; margin-bottom: var(--sp-5); }
-        .auth-header h1 { font-size: 1.8rem; margin-bottom: var(--sp-2); }
-        .auth-header p { color: var(--text-muted); font-size: 0.92rem; }
-        .role-grid { display: flex; flex-direction: column; gap: var(--sp-2); }
-        .role-card {
-          text-align: left;
-          padding: var(--sp-3) var(--sp-4);
-          border: 1.5px solid var(--border);
-          border-radius: var(--r-md);
-          background: var(--bg-input);
-          cursor: pointer;
-          transition: all var(--t-fast);
-          display: flex; flex-direction: column; gap: 2px;
-        }
-        .role-card:hover { border-color: var(--border-hover); }
-        .role-card.selected { border-color: var(--color-primary); background: rgba(34,197,94,0.08); box-shadow: 0 0 12px rgba(34,197,94,0.15); }
-        .role-label { font-weight: 700; font-size: 0.92rem; color: var(--text-primary); }
-        .role-desc { font-size: 0.78rem; color: var(--text-muted); }
-      `}</style>
+            <button type="submit" className="btn btn-primary auth-submit" disabled={loading} id="register-submit">
+              {loading ? <><span className="spinner spinner-sm" /> Creating account…</> : 'Create account'}
+            </button>
+          </form>
+
+          <p className="auth-switch">
+            Already have an account? <Link to="/login">Sign in</Link>
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

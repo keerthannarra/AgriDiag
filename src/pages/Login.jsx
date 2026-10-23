@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import './Auth.css';
 
 export default function Login() {
   const { login } = useAuth();
@@ -9,15 +10,15 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async e => {
-    e.preventDefault();
+  const handleSubmit = async event => {
+    event.preventDefault();
     setError('');
     setLoading(true);
     try {
       await login(form.email, form.password);
       navigate('/dashboard');
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Invalid email or password');
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || 'Invalid email or password');
     } finally {
       setLoading(false);
     }
@@ -25,112 +26,76 @@ export default function Login() {
 
   return (
     <div className="auth-page">
-      <div className="auth-orb auth-orb-1" />
-      <div className="auth-orb auth-orb-2" />
-      <div className="auth-card card-glass animate-scale-in">
-        <div className="auth-header">
-          <Link to="/" className="auth-logo">🌿 AgriDiag</Link>
-          <h1>Welcome back</h1>
-          <p>Sign in to continue diagnosing your plants</p>
-        </div>
-
-        {error && (
-          <div className="alert alert-error mb-4">
-            <span>⚠️</span> {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label" htmlFor="login-email">Email address</label>
-            <input
-              id="login-email"
-              type="email"
-              className="form-input"
-              placeholder="you@example.com"
-              value={form.email}
-              onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-              required
-              autoComplete="email"
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="login-password">Password</label>
-            <input
-              id="login-password"
-              type="password"
-              className="form-input"
-              placeholder="••••••••"
-              value={form.password}
-              onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-              required
-              autoComplete="current-password"
-            />
-          </div>
-          <button
-            type="submit"
-            className="btn btn-primary w-full"
-            style={{ marginTop: 'var(--sp-2)', padding: '0.85rem' }}
-            disabled={loading}
-            id="login-submit"
-          >
-            {loading ? <><span className="spinner spinner-sm" /> Signing in…</> : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="divider-text" style={{ margin: 'var(--sp-6) 0' }}>
-          New to AgriDiag?
-        </div>
-        <Link to="/register" className="btn btn-outline w-full" style={{ justifyContent: 'center' }}>
-          Create an account
+      <section className="auth-visual" aria-label="AgriDiag plant health">
+        <img
+          className="auth-visual-image"
+          src="https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=1400&q=85"
+          alt="Sunlight falling across healthy green leaves"
+        />
+        <div className="auth-visual-shade" />
+        <Link to="/" className="auth-brand" aria-label="AgriDiag home">
+          <span className="auth-brand-mark" aria-hidden="true">✿</span>
+          <span>Agri<span>Diag</span></span>
         </Link>
-      </div>
+        <div className="auth-visual-copy">
+          <span className="auth-eyebrow">A CLOSER LOOK AT PLANT HEALTH</span>
+          <h1>Good growing starts with noticing.</h1>
+          <p>Get a clearer view of your plants and keep your growing notes together.</p>
+        </div>
+        <span className="auth-visual-caption">AGRICULTURE / OBSERVATION / CARE</span>
+      </section>
 
-      <style>{`
-        .auth-page {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: var(--sp-8) var(--sp-4);
-          position: relative;
-          overflow: hidden;
-        }
-        .auth-orb {
-          position: absolute;
-          border-radius: 50%;
-          filter: blur(80px);
-          pointer-events: none;
-        }
-        .auth-orb-1 {
-          width: 400px; height: 400px;
-          background: radial-gradient(circle, rgba(34,197,94,0.1), transparent);
-          top: -100px; left: -100px;
-        }
-        .auth-orb-2 {
-          width: 300px; height: 300px;
-          background: radial-gradient(circle, rgba(245,158,11,0.08), transparent);
-          bottom: -60px; right: -60px;
-        }
-        .auth-card {
-          width: 100%;
-          max-width: 440px;
-          padding: var(--sp-10);
-          position: relative;
-          z-index: 1;
-        }
-        .auth-header { text-align: center; margin-bottom: var(--sp-8); }
-        .auth-logo {
-          font-family: var(--font-heading);
-          font-size: 1.5rem;
-          font-weight: 800;
-          color: var(--color-primary);
-          display: block;
-          margin-bottom: var(--sp-5);
-        }
-        .auth-header h1 { font-size: 1.8rem; margin-bottom: var(--sp-2); }
-        .auth-header p { color: var(--text-muted); font-size: 0.92rem; }
-      `}</style>
+      <section className="auth-form-side">
+        <div className="auth-form-card">
+          <div className="auth-form-heading">
+            <span className="auth-eyebrow">WELCOME BACK</span>
+            <h2>Sign in to AgriDiag</h2>
+            <p>Pick up where you left off with your plants.</p>
+          </div>
+
+          {error && (
+            <div className="auth-error" role="alert">
+              <span aria-hidden="true">!</span>
+              <p>{error}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            <div className="auth-field">
+              <label htmlFor="login-email">Email address</label>
+              <input
+                id="login-email"
+                type="email"
+                placeholder="you@example.com"
+                value={form.email}
+                onChange={event => setForm(current => ({ ...current, email: event.target.value }))}
+                required
+                autoComplete="email"
+              />
+            </div>
+            <div className="auth-field">
+              <label htmlFor="login-password">Password</label>
+              <input
+                id="login-password"
+                type="password"
+                placeholder="Enter your password"
+                value={form.password}
+                onChange={event => setForm(current => ({ ...current, password: event.target.value }))}
+                required
+                autoComplete="current-password"
+              />
+            </div>
+            <button type="submit" className="btn btn-primary auth-submit" disabled={loading} id="login-submit">
+              {loading ? <><span className="spinner spinner-sm" /> Signing in…</> : 'Sign in'}
+            </button>
+          </form>
+
+          <p className="auth-switch">
+            New to AgriDiag? <Link to="/register">Create an account</Link>
+          </p>
+          <p className="auth-privacy-note">Your growing records stay connected to your account.</p>
+        </div>
+      </section>
     </div>
   );
 }

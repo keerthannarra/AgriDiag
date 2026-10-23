@@ -16,7 +16,7 @@ FastAPI Backend (Python)  ←  Auth + Diagnosis API + ML Inference
         │
    ┌────┴────┐
    ▼         ▼
-MongoDB    Hugging Face CNN Model
+PostgreSQL Hugging Face CNN Model
 ```
 
 ---
@@ -28,7 +28,7 @@ MongoDB    Hugging Face CNN Model
 | Frontend | React 18 + Vite, React Router v6 |
 | Styling | Vanilla CSS with design system |
 | Backend | Python 3.11 + FastAPI |
-| Database | MongoDB + Beanie ODM (async) |
+| Database | PostgreSQL + SQLAlchemy (async) |
 | Auth | JWT (python-jose) + passlib[bcrypt] |
 | ML Inference | Hugging Face Inference API |
 | Image Processing | Pillow |
@@ -48,12 +48,12 @@ agridiag-dev/
 │   │   └── services/       # API client (Axios)
 │   ├── index.html
 │   └── package.json
-├── backend/                # FastAPI application
+├── server/                 # FastAPI application
 │   ├── app/
 │   │   ├── main.py         # FastAPI app entry point
 │   │   ├── config.py       # Settings (pydantic-settings)
-│   │   ├── database.py     # MongoDB / Beanie init
-│   │   ├── models/         # Beanie document models
+│   │   ├── database.py     # PostgreSQL / SQLAlchemy init
+│   │   ├── models/         # SQLAlchemy ORM models
 │   │   ├── routers/        # API route handlers
 │   │   ├── services/       # Business logic
 │   │   ├── ml/             # ML inference + preprocessing
@@ -71,24 +71,33 @@ agridiag-dev/
 ### Prerequisites
 - Node.js 18+
 - Python 3.11+
-- MongoDB (local or Atlas)
+- PostgreSQL 14+
 - Hugging Face account (for API token)
 
 ### Backend Setup
 
+Start the local PostgreSQL database from the repository root:
+
 ```bash
-cd backend
-python -m venv venv
+docker compose up -d db
+```
+
+The app's development database URL matches this container by default. To use a
+different or hosted PostgreSQL instance, set `DATABASE_URL` in `server/.env`.
+The Compose credentials are for local development only.
+
+```bash
+cd server
+python -m venv .venv
 # Windows:
-venv\Scripts\activate
+.venv\Scripts\activate
 # macOS/Linux:
-source venv/bin/activate
+source .venv/bin/activate
 
 pip install -r requirements.txt
 
-# Copy and configure environment
-cp .env.example .env
-# Edit .env with your MongoDB URL, JWT secret, HuggingFace token
+# Create .env and configure your PostgreSQL URL, JWT secret, and HuggingFace token
+# DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/agridiag
 
 # Seed the database with plant/disease data
 python seed.py
@@ -212,7 +221,7 @@ The model should be compatible with image classification and trained on PlantVil
 |---------|---------|
 | Frontend | Vercel |
 | Backend (FastAPI) | Render |
-| Database | MongoDB Atlas |
+| Database | PostgreSQL |
 
 ---
 

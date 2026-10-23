@@ -8,7 +8,7 @@ This file is updated after each development session to track project state, deci
 
 **AgriDiag** is an AI-powered plant disease diagnosis and agricultural knowledge platform.
 
-- **Stack:** React (Vite) + FastAPI (Python) + MongoDB (Beanie ODM) + Hugging Face CNN
+- **Stack:** React (Vite) + FastAPI (Python) + PostgreSQL (SQLAlchemy async) + Hugging Face CNN
 - **Auth:** JWT (python-jose) + bcrypt
 - **ML:** HuggingFace Inference API (image classification)
 - **Roles:** FARMER, SCIENTIST, AGRICULTURIST
@@ -24,13 +24,13 @@ This file is updated after each development session to track project state, deci
 - Implementation plan created and approved
 - Architecture finalized: FastAPI replaces Express for backend, unifying API + ML in one Python service
 - Full project scaffolded:
-  - Backend: FastAPI app with Beanie ODM, JWT auth, all routers, ML inference service
+  - Backend: FastAPI app with SQLAlchemy async ORM, JWT auth, all routers, ML inference service
   - Frontend: React + Vite with premium dark nature-themed design system
   - README.md and CONTEXT.md created
 
 **Key Decisions:**
 - FastAPI chosen over Express/Node.js (user preference) — enables Python-native ML integration
-- Beanie ODM chosen for MongoDB (async, Pydantic-based)
+- SQLAlchemy async ORM chosen for PostgreSQL persistence
 - HuggingFace Inference API used (HTTP-based, no local model download needed)
 - JWT stored in localStorage (frontend); Axios interceptor handles auth headers
 - Confidence threshold: 0.60 (configurable in .env)
@@ -127,7 +127,7 @@ CONTEXT.md
 
 ## Environment Setup Checklist
 
-- [ ] MongoDB running locally or Atlas URI configured in `.env`
+- [ ] PostgreSQL running locally or hosted connection URL configured as `DATABASE_URL` in `.env`
 - [ ] HuggingFace API token added to `.env`
 - [ ] Backend venv activated and dependencies installed
 - [ ] Frontend node_modules installed (`npm install`)

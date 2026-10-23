@@ -1,127 +1,295 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { historyApi } from '../services/api';
+import './History.css';
+
+const PAGE_SIZE = 100;
+const FILTERS = [
+  { id: 'all', label: 'All records' },
+  { id: 'attention', label: 'Needs attention' },
+  { id: 'healthy', label: 'Healthy' },
+];
+
+function formatDate(value) {
+  if (!value) return 'Date unavailable';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
+
+  return new Intl.DateTimeFormat('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+}
+
+function HistoryRecord({ record, deleting, onDelete }) {
+  const id = record.id || record._id;
+  const confidence = Number.isFinite(record.confidence)
+    ? `${Math.round(record.confidence * 100)}%`
+    : '—';
+
+  return (
+    <article className="history-record">
+      <div className="history-record-photo">
+        {record.image_url ? (
+          <img
+            src={record.image_url}
+            alt={`${record.plant || 'Plant'} diagnosis`}
+            onError={event => { event.currentTarget.hidden = true; }}
+          />
+        ) : null}
+        <span className="history-photo-fallback" aria-hidden="true">PLANT</span>
+      </div>
+
+      <div className="history-record-main">
+        <span className="history-record-plant">{record.plant || 'Plant not identified'}</span>
+        <h2>{record.disease || 'Diagnosis result unavailable'}</h2>
+        <span className="history-record-date">{formatDate(record.created_at)}</span>
+      </div>
+
+      <div className="history-record-result">
+        <span className={`history-status ${record.is_healthy ? 'history-status--healthy' : 'history-status--attention'}`}>
+          <span aria-hidden="true" />
+          {record.is_healthy ? 'Healthy' : 'Needs attention'}
+        </span>
+        <span className="history-confidence">{confidence} <span>confidence</span></span>
+      </div>
+
+      <div className="history-record-actions">
+        <Link to={`/results/${id}`} className="history-view-link" aria-label={`View ${record.plant || 'plant'} diagnosis`}>
+          View report <span aria-hidden="true">↗</span>
+        </Link>
+        <button
+          type="button"
+          className="history-delete-button"
+          onClick={() => onDelete(id)}
+          disabled={deleting}
+          aria-label={`Delete ${record.plant || 'plant'} diagnosis`}
+        >
+          {deleting ? 'Deleting…' : 'Delete'}
+        </button>
+      </div>
+    </article>
+  );
+}
 
 export default function History() {
   const [data, setData] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
+  const [activeFilter, setActiveFilter] = useState('all');
   const [deleting, setDeleting] = useState(null);
+  const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
 
-  const fetchHistory = useCallback(async () => {
+  const fetchHistory = useCallback(async (activeSearch, isCurrent) => {
     setLoading(true);
+    setError('');
     try {
-      const res = search
-        ? await historyApi.search(search)
-        : await historyApi.list(0, 50);
-      setData(res.data.data || []);
-      setTotal(res.data.total || res.data.count || 0);
-    } catch {} finally { setLoading(false); }
-  }, [search]);
+      const response = activeSearch
+        ? await historyApi.search(activeSearch)
+        : await historyApi.list(0, PAGE_SIZE);
+      if (!isCurrent()) return;
+      setData(response.data.data || []);
+      setTotal(response.data.total ?? response.data.count ?? 0);
+    } catch (requestError) {
+      if (!isCurrent()) return;
+      setError(
+        requestError.response?.data?.detail
+        || requestError.message
+        || 'We could not load your diagnosis history. Please try again.'
+      );
+    } finally {
+      if (isCurrent()) setLoading(false);
+    }
+  }, []);
 
-  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+  useEffect(() => {
+    let isCurrent = true;
+    fetchHistory(search, () => isCurrent);
+    return () => { isCurrent = false; };
+  }, [fetchHistory, reload, search]);
 
-  const handleSearch = e => { e.preventDefault(); fetchHistory(); };
+  const visibleRecords = useMemo(() => {
+    if (activeFilter === 'healthy') return data.filter(record => record.is_healthy);
+    if (activeFilter === 'attention') return data.filter(record => !record.is_healthy);
+    return data;
+  }, [activeFilter, data]);
 
-  const handleDelete = async id => {
-    if (!confirm('Delete this diagnosis record?')) return;
-    setDeleting(id);
-    try {
-      await historyApi.delete(id);
-      setData(d => d.filter(x => (x.id || x._id) !== id));
-      setTotal(t => t - 1);
-    } catch {} finally { setDeleting(null); }
+  const healthyCount = data.filter(record => record.is_healthy).length;
+  const attentionCount = data.length - healthyCount;
+
+  const handleSearch = event => {
+    event.preventDefault();
+    setSearch(query.trim());
+    setActiveFilter('all');
   };
 
-  const fmt = dt => new Date(dt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
+  const clearSearch = () => {
+    setQuery('');
+    setSearch('');
+    setActiveFilter('all');
+  };
+
+  const handleDelete = async id => {
+    if (!window.confirm('Delete this diagnosis record? This cannot be undone.')) return;
+    setDeleting(id);
+    setError('');
+    try {
+      await historyApi.delete(id);
+      setData(records => records.filter(record => (record.id || record._id) !== id));
+      setTotal(count => Math.max(0, count - 1));
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.detail
+        || requestError.message
+        || 'We could not delete this record. Please try again.'
+      );
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   return (
-    <div className="page">
-      <div className="container">
-        <div className="page-hero">
-          <span className="section-label">My Records</span>
-          <h1>Diagnosis History</h1>
-          <p>Track all your plant diagnoses with search and filter capabilities.</p>
-        </div>
-
-        {/* Search */}
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: 'var(--sp-3)', marginBottom: 'var(--sp-6)' }}>
-          <div className="search-bar" style={{ flex: 1 }}>
-            <span className="search-icon">🔍</span>
-            <input
-              className="form-input"
-              id="history-search"
-              placeholder="Search by plant or disease…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+    <main className="history-page">
+      <div className="history-container">
+        <header className="history-header">
+          <div>
+            <span className="history-eyebrow">YOUR GROWING RECORD</span>
+            <h1>A history of healthier growing.</h1>
+            <p>Every check in one place. Revisit a report, notice changes, and keep your next step close.</p>
           </div>
-          <button type="submit" className="btn btn-primary">Search</button>
-          {search && <button type="button" className="btn btn-outline" onClick={() => { setSearch(''); }}>Clear</button>}
-        </form>
+          <Link to="/diagnose" className="history-new-link">New plant check <span aria-hidden="true">↗</span></Link>
+        </header>
 
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: 'var(--sp-4)' }}>
-          {total} record{total !== 1 ? 's' : ''}
-        </div>
+        <section className="history-stats" aria-label="Diagnosis history overview">
+          <div className="history-stat history-stat--total">
+            <span className="history-stat-label">TOTAL CHECKS</span>
+            <strong>{total}</strong>
+            <span className="history-stat-note">in your history</span>
+          </div>
+          <div className="history-stat">
+            <span className="history-stat-label">HEALTHY RESULTS</span>
+            <strong>{healthyCount}</strong>
+            <span className="history-stat-note">in {data.length} records shown</span>
+          </div>
+          <div className="history-stat">
+            <span className="history-stat-label">NEEDS ATTENTION</span>
+            <strong>{attentionCount}</strong>
+            <span className="history-stat-note">in {data.length} records shown</span>
+          </div>
+          <div className="history-stat-aside">
+            <span className="history-eyebrow">A LITTLE CONTEXT</span>
+            <p>Use reports as a guide, compare them with what you see, and seek local expert advice when needed.</p>
+          </div>
+        </section>
 
-        {loading ? (
-          <div className="loading-center"><div className="spinner" /></div>
-        ) : data.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">📋</div>
-            <h3>No diagnoses yet</h3>
-            <p style={{ margin: 'var(--sp-3) 0 var(--sp-6)' }}>Start by diagnosing a plant leaf image.</p>
-            <Link to="/diagnose" className="btn btn-primary">🌿 Diagnose Now</Link>
+        <section className="history-archive" aria-labelledby="history-archive-title">
+          <div className="history-archive-heading">
+            <div>
+              <span className="history-eyebrow">FIELD NOTES</span>
+              <h2 id="history-archive-title">Your diagnosis archive</h2>
+            </div>
+            <span className="history-count">
+              {search ? `${total} search result${total === 1 ? '' : 's'}` : `${total} record${total === 1 ? '' : 's'}`}
+            </span>
           </div>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Plant</th>
-                  <th>Disease</th>
-                  <th>Confidence</th>
-                  <th>Status</th>
-                  <th>Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map(d => (
-                  <tr key={d.id || d._id}>
-                    <td style={{ fontWeight: 700 }}>{d.plant}</td>
-                    <td>{d.disease}</td>
-                    <td>
-                      <span style={{ fontWeight: 700, color: d.confidence >= 0.8 ? 'var(--color-primary)' : d.confidence >= 0.6 ? 'var(--color-accent)' : 'var(--error)' }}>
-                        {(d.confidence * 100).toFixed(1)}%
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge ${d.is_healthy ? 'badge-green' : 'badge-amber'}`}>
-                        {d.is_healthy ? '✅ Healthy' : '🦠 Disease'}
-                      </span>
-                    </td>
-                    <td>{fmt(d.created_at)}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-                        <Link to={`/results/${d.id || d._id}`} className="btn btn-outline btn-sm">View</Link>
-                        <button
-                          className="btn btn-danger btn-sm"
-                          onClick={() => handleDelete(d.id || d._id)}
-                          disabled={deleting === (d.id || d._id)}
-                        >
-                          {deleting === (d.id || d._id) ? '…' : 'Delete'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          <form className="history-search" onSubmit={handleSearch} role="search">
+            <label className="history-search-field">
+              <span className="history-search-label">Search your records</span>
+              <input
+                type="search"
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+                placeholder="Try a plant or disease name"
+                aria-label="Search by plant or disease"
+              />
+            </label>
+            <button type="submit" className="btn btn-primary">Search records</button>
+            {search && (
+              <button type="button" className="history-clear-button" onClick={clearSearch}>Clear search</button>
+            )}
+          </form>
+
+          <div className="history-filter-row">
+            <div className="history-filters" role="group" aria-label="Filter diagnosis records">
+              {FILTERS.map(filter => (
+                <button
+                  type="button"
+                  key={filter.id}
+                  aria-pressed={activeFilter === filter.id}
+                  className={activeFilter === filter.id ? 'is-active' : ''}
+                  onClick={() => setActiveFilter(filter.id)}
+                >
+                  {filter.label}
+                  <span>
+                    {filter.id === 'all' ? data.length : filter.id === 'healthy' ? healthyCount : attentionCount}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {!search && total > data.length && (
+              <span className="history-latest-note">Showing the latest {data.length}</span>
+            )}
           </div>
-        )}
+
+          {error && (
+            <div className="history-error" role="alert">
+              <p>{error}</p>
+              {!data.length && (
+                <button type="button" onClick={() => setReload(value => value + 1)}>Try again</button>
+              )}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="history-loading" role="status">
+              <div className="spinner spinner-lg" />
+              <p>Gathering your plant notes…</p>
+            </div>
+          ) : visibleRecords.length ? (
+            <div className="history-record-list">
+              {visibleRecords.map(record => (
+                <HistoryRecord
+                  key={record.id || record._id}
+                  record={record}
+                  deleting={deleting === (record.id || record._id)}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          ) : !error ? (
+            <div className="history-empty">
+              <span className="history-empty-index" aria-hidden="true">01</span>
+              <span className="history-eyebrow">
+                {search ? 'NO MATCHES FOUND' : data.length ? 'NOTHING IN THIS FILTER' : 'A FRESH START'}
+              </span>
+              <h3>
+                {search
+                  ? 'No records match that search.'
+                  : data.length
+                    ? 'No diagnoses in this group.'
+                    : 'Your plant notes will live here.'}
+              </h3>
+              <p>
+                {search
+                  ? 'Try another plant or disease name, or clear your search to see every record.'
+                  : data.length
+                    ? 'Choose another category to browse your archive.'
+                    : 'Run your first plant check and come back to review the result anytime.'}
+              </p>
+              {search ? (
+                <button type="button" className="history-empty-link" onClick={clearSearch}>Clear search</button>
+              ) : !data.length ? (
+                <Link to="/diagnose" className="history-empty-link">Start a diagnosis <span aria-hidden="true">↗</span></Link>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
       </div>
-    </div>
+    </main>
   );
 }

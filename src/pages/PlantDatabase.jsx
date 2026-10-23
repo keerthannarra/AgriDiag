@@ -1,144 +1,385 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { plantsApi } from '../services/api';
+import './PlantDatabase.css';
+
+const LIBRARY_TABS = [
+  { id: 'plants', label: 'Plants' },
+  { id: 'diseases', label: 'Diseases' },
+];
+
+const PLANT_IMAGES = [
+  'photo-1497250681960-ef046c08a56e',
+  'photo-1501004318641-b39e6451bec6',
+  'photo-1464226184884-fa280b87c399',
+  'photo-1592841200221-a6898f307baa',
+];
+
+const DISEASE_IMAGES = [
+  'photo-1518531933037-91b2f5f229cc',
+  'photo-1416879595882-3373a0480b5b',
+  'photo-1470058869958-2a77ade41c02',
+  'photo-1497250681960-ef046c08a56e',
+];
+
+function getImageUrl(item, type, index = 0) {
+  if (item.image_url) return item.image_url;
+  const images = type === 'plant' ? PLANT_IMAGES : DISEASE_IMAGES;
+  const image = images[index % images.length];
+  return `https://images.unsplash.com/${image}?auto=format&fit=crop&w=900&q=80`;
+}
+
+function getSeverityClass(severity = '') {
+  const normalized = severity.toLowerCase();
+  if (normalized === 'high' || normalized === 'severe') return 'severity-high';
+  if (normalized === 'medium' || normalized === 'moderate') return 'severity-medium';
+  return 'severity-low';
+}
+
+function DetailSection({ title, items }) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  return (
+    <section className="library-detail-section">
+      <h3>{title}</h3>
+      <ul>
+        {items.map((item, index) => (
+          <li key={`${title}-${index}`}>
+            <span>{String(index + 1).padStart(2, '0')}</span>
+            {item}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 export default function PlantDatabase() {
   const [plants, setPlants] = useState([]);
   const [diseases, setDiseases] = useState([]);
+  const [totals, setTotals] = useState({ plants: 0, diseases: 0 });
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('plants');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
+  const closeButtonRef = useRef(null);
+
+  const loadLibrary = useCallback(async (tab = activeTab, query = '') => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = tab === 'plants'
+        ? await plantsApi.list(query, 0, 100)
+        : await plantsApi.listDiseases(query, 0, 100);
+      const data = response.data.data || [];
+      if (tab === 'plants') {
+        setPlants(data);
+        if (!query) setTotals(current => ({ ...current, plants: response.data.total ?? data.length }));
+      } else {
+        setDiseases(data);
+        if (!query) setTotals(current => ({ ...current, diseases: response.data.total ?? data.length }));
+      }
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.detail
+          || 'We could not load the library. Check your connection and try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
-    Promise.all([plantsApi.list(), plantsApi.listDiseases()])
-      .then(([p, d]) => {
-        setPlants(p.data.data || []);
-        setDiseases(d.data.data || []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const loadInitialLibrary = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const [plantResponse, diseaseResponse] = await Promise.all([
+          plantsApi.list('', 0, 100),
+          plantsApi.listDiseases('', 0, 100),
+        ]);
+        const plantData = plantResponse.data.data || [];
+        const diseaseData = diseaseResponse.data.data || [];
+        setPlants(plantData);
+        setDiseases(diseaseData);
+        setTotals({
+          plants: plantResponse.data.total ?? plantData.length,
+          diseases: diseaseResponse.data.total ?? diseaseData.length,
+        });
+      } catch (requestError) {
+        setError(
+          requestError.response?.data?.detail
+            || 'We could not load the library. Check your connection and try again.'
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadInitialLibrary();
   }, []);
 
-  const handleSearch = async e => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      if (activeTab === 'plants') {
-        const r = await plantsApi.list(search);
-        setPlants(r.data.data || []);
-      } else {
-        const r = await plantsApi.listDiseases(search);
-        setDiseases(r.data.data || []);
-      }
-    } catch {} finally { setLoading(false); }
+  useEffect(() => {
+    if (!selected) return undefined;
+    closeButtonRef.current?.focus();
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') setSelected(null);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [selected]);
+
+  const handleSearch = event => {
+    event.preventDefault();
+    loadLibrary(activeTab, search.trim());
   };
 
-  const severityBadge = s => s === 'High' ? 'badge-red' : s === 'Medium' ? 'badge-amber' : 'badge-green';
+  const changeTab = tab => {
+    if (tab === activeTab) return;
+    setActiveTab(tab);
+    setSearch('');
+    setError('');
+    loadLibrary(tab);
+  };
+
+  const activeItems = activeTab === 'plants' ? plants : diseases;
+  const activeTotal = totals[activeTab];
+  const itemType = activeTab === 'plants' ? 'plant' : 'disease';
 
   return (
-    <div className="page">
-      <div className="container">
-        <div className="page-hero">
-          <span className="section-label">Knowledge Base</span>
-          <h1>Plant & Disease Database</h1>
-          <p>Browse our comprehensive plant disease encyclopedia with treatment and prevention information.</p>
+    <main className="library-page">
+      <section className="library-hero">
+        <div className="library-hero-inner">
+          <span className="library-eyebrow">THE AGRIDIAG REFERENCE LIBRARY</span>
+          <h1>Know what<br />you’re growing.</h1>
+          <p>
+            A practical guide to the crops you care for and the plant health challenges
+            worth keeping an eye on.
+          </p>
+          <a className="library-hero-link" href="#library-browser">
+            Explore the library <span aria-hidden="true">↓</span>
+          </a>
         </div>
-
-        <div className="tabs" style={{ marginBottom: 'var(--sp-6)' }}>
-          <button className={`tab-btn ${activeTab === 'plants' ? 'active' : ''}`} onClick={() => setActiveTab('plants')}>🌿 Plants ({plants.length})</button>
-          <button className={`tab-btn ${activeTab === 'diseases' ? 'active' : ''}`} onClick={() => setActiveTab('diseases')}>🦠 Diseases ({diseases.length})</button>
+        <div className="library-hero-image">
+          <img
+            src="https://images.unsplash.com/photo-1464226184884-fa280b87c399?auto=format&fit=crop&w=1500&q=85"
+            alt="Rows of fresh crops growing in a field"
+            fetchpriority="high"
+          />
+          <span>FIELD GUIDE&nbsp; / &nbsp;PLANT HEALTH</span>
         </div>
+        <div className="library-hero-index" aria-hidden="true">01<br />FIELD NOTES</div>
+      </section>
 
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: 'var(--sp-3)', marginBottom: 'var(--sp-6)' }}>
-          <div className="search-bar" style={{ flex: 1 }}>
-            <span className="search-icon">🔍</span>
-            <input className="form-input" id="plant-search" placeholder={`Search ${activeTab}…`} value={search} onChange={e => setSearch(e.target.value)} />
+      <section className="library-browser" id="library-browser">
+        <div className="library-browser-inner">
+          <header className="library-browser-heading">
+            <div>
+              <span className="library-eyebrow">EXPLORE THE COLLECTION</span>
+              <h2>Find what you need.</h2>
+            </div>
+            <Link to="/diagnose" className="library-diagnose-link">
+              Check a leaf <span aria-hidden="true">↗</span>
+            </Link>
+          </header>
+
+          <div className="library-controls">
+            <div className="library-tabs" role="tablist" aria-label="Library category">
+              {LIBRARY_TABS.map(tab => {
+                const count = totals[tab.id];
+                return (
+                  <button
+                    type="button"
+                    role="tab"
+                    key={tab.id}
+                    id={`library-tab-${tab.id}`}
+                    aria-selected={activeTab === tab.id}
+                    aria-controls="library-results"
+                    className={`library-tab ${activeTab === tab.id ? 'is-active' : ''}`}
+                    onClick={() => changeTab(tab.id)}
+                  >
+                    <span>{tab.label}</span>
+                    <span className="library-tab-count">{loading ? '—' : count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <form className="library-search" onSubmit={handleSearch} role="search">
+              <span className="library-search-icon" aria-hidden="true" />
+              <label className="library-visually-hidden" htmlFor="plant-search">
+                Search plants and diseases
+              </label>
+              <input
+                id="plant-search"
+                type="search"
+                value={search}
+                placeholder={`Search ${activeTab}…`}
+                onChange={event => setSearch(event.target.value)}
+              />
+              {search && (
+                <button
+                  type="button"
+                  className="library-clear-search"
+                  onClick={() => {
+                    setSearch('');
+                    loadLibrary(activeTab);
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+              <button className="library-search-submit" type="submit">Search</button>
+            </form>
           </div>
-          <button type="submit" className="btn btn-primary">Search</button>
-          {search && <button type="button" className="btn btn-outline" onClick={() => setSearch('')}>Clear</button>}
-        </form>
 
-        {loading ? (
-          <div className="loading-center"><div className="spinner" /></div>
-        ) : activeTab === 'plants' ? (
-          <div className="grid-3">
-            {plants.map(p => (
-              <div key={p.id || p._id} className="card card-hover" style={{ cursor: 'pointer' }} onClick={() => setSelected({ type: 'plant', data: p })}>
-                <div style={{ fontSize: '2.5rem', marginBottom: 'var(--sp-3)' }}>🌿</div>
-                <h4 style={{ marginBottom: 'var(--sp-1)' }}>{p.name}</h4>
-                {p.scientific_name && <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.82rem', marginBottom: 'var(--sp-3)' }}>{p.scientific_name}</p>}
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.6 }}>{p.description?.slice(0, 100)}…</p>
-                {p.diseases?.length > 0 && (
-                  <div style={{ marginTop: 'var(--sp-3)', display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-1)' }}>
-                    {p.diseases.slice(0, 3).map(d => <span key={d} className="badge badge-amber" style={{ fontSize: '0.72rem' }}>{d}</span>)}
-                    {p.diseases.length > 3 && <span className="badge badge-gray" style={{ fontSize: '0.72rem' }}>+{p.diseases.length - 3} more</span>}
-                  </div>
+          <div id="library-results" role="tabpanel" aria-labelledby={`library-tab-${activeTab}`}>
+            <div className="library-results-heading">
+              <span>{search.trim() ? activeItems.length : activeTotal} {activeTab === 'plants' ? 'plant profiles' : 'disease guides'}</span>
+              {search.trim() && <span>Results for “{search.trim()}”</span>}
+            </div>
+
+            {loading ? (
+              <div className="library-loading" role="status">
+                <span className="library-loading-mark" />
+                <span>Gathering the field notes…</span>
+              </div>
+            ) : error ? (
+              <div className="library-empty-state" role="alert">
+                <span className="library-eyebrow">LIBRARY UNAVAILABLE</span>
+                <h3>We couldn’t open the collection.</h3>
+                <p>{error}</p>
+                <button type="button" className="library-retry-button" onClick={() => loadLibrary(activeTab, search.trim())}>
+                  Try again
+                </button>
+              </div>
+            ) : activeItems.length === 0 ? (
+              <div className="library-empty-state">
+                <span className="library-eyebrow">{search.trim() ? 'NO MATCHES FOUND' : 'COLLECTION EMPTY'}</span>
+                <h3>{search.trim() ? 'Try a different search.' : `No ${activeTab} in the collection yet.`}</h3>
+                <p>
+                  {search.trim()
+                    ? 'Search by crop name, disease, or scientific name.'
+                    : 'Reference entries will appear here once they have been added.'}
+                </p>
+                {search.trim() && (
+                  <button
+                    type="button"
+                    className="library-retry-button"
+                    onClick={() => {
+                      setSearch('');
+                      loadLibrary(activeTab);
+                    }}
+                  >
+                    Show all {activeTab}
+                  </button>
                 )}
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid-3">
-            {diseases.map(d => (
-              <div key={d.id || d._id} className="card card-hover" style={{ cursor: 'pointer' }} onClick={() => setSelected({ type: 'disease', data: d })}>
-                <div style={{ fontSize: '2.5rem', marginBottom: 'var(--sp-3)' }}>🦠</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginBottom: 'var(--sp-2)' }}>
-                  <h4>{d.name}</h4>
-                  {d.severity && <span className={`badge ${severityBadge(d.severity)}`}>{d.severity}</span>}
-                </div>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.6 }}>{d.description?.slice(0, 100)}…</p>
-                {d.affected_plants?.length > 0 && (
-                  <div style={{ marginTop: 'var(--sp-3)', display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-1)' }}>
-                    {d.affected_plants.map(p => <span key={p} className="badge badge-green" style={{ fontSize: '0.72rem' }}>{p}</span>)}
-                  </div>
-                )}
+            ) : (
+              <div className={`library-grid ${activeTab === 'diseases' ? 'disease-grid' : ''}`}>
+                {activeItems.map((item, index) => (
+                  <button
+                    type="button"
+                    key={item.id || item._id}
+                    className="library-card"
+                    onClick={() => setSelected({ type: itemType, data: item, index })}
+                    aria-label={`View ${item.name} ${itemType} details`}
+                  >
+                    <span className="library-card-image">
+                      <img src={getImageUrl(item, itemType, index)} alt="" loading="lazy" />
+                      <span className="library-card-number">{String(index + 1).padStart(2, '0')}</span>
+                      {itemType === 'disease' && item.severity && (
+                        <span className={`library-severity ${getSeverityClass(item.severity)}`}>
+                          {item.severity} severity
+                        </span>
+                      )}
+                    </span>
+                    <span className="library-card-content">
+                      <span className="library-card-type">{itemType === 'plant' ? 'PLANT PROFILE' : 'DISEASE GUIDE'}</span>
+                      <strong className="library-card-title">{item.name}</strong>
+                      {itemType === 'plant' && item.scientific_name && (
+                        <span className="library-scientific-name">{item.scientific_name}</span>
+                      )}
+                      <span className="library-card-description">
+                        {item.description || 'Open this entry to explore plant health information and care guidance.'}
+                      </span>
+                      <span className="library-card-tags">
+                        {(itemType === 'plant' ? item.diseases : item.affected_plants)?.slice(0, 2).map(tag => (
+                          <span key={tag}>{tag}</span>
+                        ))}
+                        {(itemType === 'plant' ? item.diseases : item.affected_plants)?.length > 2 && (
+                          <span>+{(itemType === 'plant' ? item.diseases : item.affected_plants).length - 2}</span>
+                        )}
+                      </span>
+                      <span className="library-card-open">Explore profile <span aria-hidden="true">↗</span></span>
+                    </span>
+                  </button>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
+        </div>
+      </section>
 
-        {/* Detail modal */}
-        {selected && (
-          <div className="modal-overlay" onClick={() => setSelected(null)}>
-            <div className="modal-box card-glass animate-scale-in" onClick={e => e.stopPropagation()}>
-              <button className="modal-close" onClick={() => setSelected(null)}>✕</button>
-              <h2 style={{ marginBottom: 'var(--sp-6)' }}>{selected.data.name}</h2>
-              {selected.data.scientific_name && <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: 'var(--sp-4)' }}>{selected.data.scientific_name}</p>}
-              <p style={{ color: 'var(--text-muted)', lineHeight: 1.75, marginBottom: 'var(--sp-6)' }}>{selected.data.description}</p>
-              {selected.data.symptoms?.length > 0 && (
-                <div style={{ marginBottom: 'var(--sp-5)' }}>
-                  <h4 style={{ marginBottom: 'var(--sp-3)', color: 'var(--color-accent)' }}>Symptoms</h4>
-                  <ul style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
-                    {selected.data.symptoms.map((s, i) => <li key={i} style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>▸ {s}</li>)}
-                  </ul>
+      {selected && (
+        <div className="library-modal-backdrop" onMouseDown={event => {
+          if (event.target === event.currentTarget) setSelected(null);
+        }}>
+          <section
+            className="library-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="library-modal-title"
+          >
+            <button
+              ref={closeButtonRef}
+              type="button"
+              className="library-modal-close"
+              onClick={() => setSelected(null)}
+              aria-label="Close details"
+            >
+              ×
+            </button>
+            <div className="library-modal-image">
+              <img
+                src={getImageUrl(selected.data, selected.type, selected.index)}
+                alt=""
+              />
+              <span>{selected.type === 'plant' ? 'PLANT PROFILE' : 'DISEASE GUIDE'}</span>
+            </div>
+            <div className="library-modal-content">
+              <span className="library-eyebrow">
+                {selected.type === 'plant' ? 'FROM THE PLANT LIBRARY' : 'FROM THE DISEASE LIBRARY'}
+              </span>
+              <h2 id="library-modal-title">{selected.data.name}</h2>
+              {selected.data.scientific_name && (
+                <p className="library-modal-scientific">{selected.data.scientific_name}</p>
+              )}
+              {selected.type === 'disease' && selected.data.severity && (
+                <span className={`library-severity modal-severity ${getSeverityClass(selected.data.severity)}`}>
+                  {selected.data.severity} severity
+                </span>
+              )}
+              {selected.data.description && <p className="library-modal-description">{selected.data.description}</p>}
+              {selected.data.affected_plants?.length > 0 && (
+                <div className="library-affected-plants">
+                  <h3>Affected plants</h3>
+                  <div>{selected.data.affected_plants.map(plant => <span key={plant}>{plant}</span>)}</div>
                 </div>
               )}
-              {selected.data.treatment?.length > 0 && (
-                <div>
-                  <h4 style={{ marginBottom: 'var(--sp-3)', color: 'var(--color-primary)' }}>Treatment</h4>
-                  <ul style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
-                    {selected.data.treatment.map((t, i) => <li key={i} style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>✓ {t}</li>)}
-                  </ul>
-                </div>
+              <DetailSection title="Symptoms" items={selected.data.symptoms} />
+              <DetailSection title="Causes" items={selected.data.causes} />
+              <DetailSection title="Treatment" items={selected.data.treatment} />
+              <DetailSection title="Prevention" items={selected.data.prevention} />
+              {selected.data.management && (
+                <section className="library-detail-section">
+                  <h3>Management</h3>
+                  <p>{selected.data.management}</p>
+                </section>
               )}
             </div>
-          </div>
-        )}
-
-        {plants.length === 0 && diseases.length === 0 && !loading && (
-          <div className="alert alert-info mt-6">
-            <span>ℹ️</span>
-            <div>Database is empty. Run <code>python seed.py</code> in the backend directory to populate plant and disease data.</div>
-          </div>
-        )}
-      </div>
-
-      <style>{`
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: var(--sp-6); }
-        .modal-box { max-width: 620px; width: 100%; max-height: 80vh; overflow-y: auto; padding: var(--sp-8); position: relative; }
-        .modal-close { position: absolute; top: var(--sp-4); right: var(--sp-4); background: var(--bg-card); border: 1px solid var(--border); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); cursor: pointer; font-size: 1rem; transition: all var(--t-fast); }
-        .modal-close:hover { color: var(--text-primary); border-color: var(--border-hover); }
-      `}</style>
-    </div>
+          </section>
+        </div>
+      )}
+    </main>
   );
 }

@@ -1,113 +1,215 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { feedbackApi } from '../services/api';
+import './Feedback.css';
 
 const CATEGORIES = [
-  { value: 'diagnosis', label: '🔬 Diagnosis Feedback', desc: 'Feedback about a specific diagnosis result' },
-  { value: 'website', label: '🌐 Website Feedback', desc: 'General feedback about the platform' },
-  { value: 'bug_report', label: '🐛 Bug Report', desc: 'Report a technical issue or error' },
-  { value: 'feature_request', label: '💡 Feature Request', desc: 'Suggest a new feature or improvement' },
-  { value: 'general', label: '💬 General', desc: 'Other feedback or comments' },
+  { value: 'diagnosis', label: 'Diagnosis result', description: 'Accuracy, clarity, or care suggestions' },
+  { value: 'website', label: 'Website experience', description: 'Navigation, design, or ease of use' },
+  { value: 'bug_report', label: 'Report a problem', description: 'Something is not working as expected' },
+  { value: 'feature_request', label: 'Suggest an idea', description: 'A tool or improvement you would like' },
+  { value: 'general', label: 'Something else', description: 'Any other thoughts for our team' },
 ];
 
+const RATING_LABELS = {
+  1: 'Not good',
+  2: 'Could be better',
+  3: 'It was okay',
+  4: 'Good experience',
+  5: 'Excellent',
+};
+
+const EMPTY_FORM = { category: 'general', rating: 5, message: '', diagnosis_id: '' };
+
 export default function Feedback() {
-  const [form, setForm] = useState({ category: 'general', rating: 5, message: '', diagnosis_id: '' });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async e => {
-    e.preventDefault();
-    if (!form.message.trim()) { setError('Please write a message.'); return; }
-    setLoading(true); setError('');
-    try {
-      await feedbackApi.submit({ ...form, diagnosis_id: form.diagnosis_id || undefined });
-      setSubmitted(true);
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to submit feedback. Please try again.');
-    } finally { setLoading(false); }
+  const updateForm = (field, value) => {
+    setForm(current => ({ ...current, [field]: value }));
+    if (error) setError('');
   };
 
-  if (submitted) return (
-    <div className="page">
-      <div className="container" style={{ maxWidth: 600, textAlign: 'center' }}>
-        <div className="card card-glass" style={{ padding: 'var(--sp-16)' }}>
-          <div style={{ fontSize: '4rem', marginBottom: 'var(--sp-5)' }}>🎉</div>
-          <h2 style={{ marginBottom: 'var(--sp-4)' }}>Thank you!</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--sp-8)' }}>Your feedback helps us improve AgriDiag for all farmers and agricultural professionals.</p>
-          <button className="btn btn-primary" onClick={() => { setSubmitted(false); setForm({ category: 'general', rating: 5, message: '', diagnosis_id: '' }); }}>
-            Submit Another
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  const handleSubmit = async event => {
+    event.preventDefault();
+    const message = form.message.trim();
+    if (!message) {
+      setError('Please add a message before sending your feedback.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      await feedbackApi.submit({
+        ...form,
+        message,
+        diagnosis_id: form.diagnosis_id.trim() || undefined,
+      });
+      setSubmitted(true);
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.detail
+        || requestError.message
+        || 'We could not send your feedback. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setError('');
+    setSubmitted(false);
+  };
+
+  if (submitted) {
+    return (
+      <main className="feedback-page">
+        <section className="feedback-success">
+          <span className="feedback-success-kicker">NOTE RECEIVED</span>
+          <div className="feedback-success-mark" aria-hidden="true">✓</div>
+          <h1>Thank you for helping us grow.</h1>
+          <p>Your thoughts have been shared with the AgriDiag team. We appreciate you taking the time to make plant care better for everyone.</p>
+          <div className="feedback-success-actions">
+            <button type="button" className="btn btn-primary" onClick={resetForm}>Send another note</button>
+            <Link to="/dashboard" className="feedback-back-link">Back to your dashboard</Link>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
-    <div className="page">
-      <div className="container" style={{ maxWidth: 680 }}>
-        <div className="page-hero">
-          <span className="section-label">Help Us Improve</span>
-          <h1>Share Your Feedback</h1>
-          <p>Your feedback helps us make AgriDiag better for everyone.</p>
-        </div>
+    <main className="feedback-page">
+      <div className="feedback-layout">
+        <header className="feedback-intro">
+          <span className="feedback-eyebrow">A NOTE TO THE TEAM</span>
+          <h1>Help us grow a better AgriDiag.</h1>
+          <p>Tell us what’s working, what needs attention, or what would make your next plant check more useful.</p>
+          <div className="feedback-aside">
+            <span className="feedback-aside-rule" aria-hidden="true" />
+            <p>Every thoughtful note helps us make plant care more useful for growers and agricultural professionals.</p>
+          </div>
+          <span className="feedback-page-number" aria-hidden="true">01 / YOUR FEEDBACK</span>
+        </header>
 
-        {error && <div className="alert alert-error mb-4"><span>⚠️</span> {error}</div>}
+        <form className="feedback-form" onSubmit={handleSubmit}>
+          <div className="feedback-form-header">
+            <div>
+              <span className="feedback-eyebrow">SHARE YOUR THOUGHTS</span>
+              <h2>Your feedback</h2>
+            </div>
+            <span className="feedback-required-note"><span aria-hidden="true">*</span> Required</span>
+          </div>
 
-        <form onSubmit={handleSubmit} className="card card-glass" style={{ padding: 'var(--sp-8)' }}>
-          {/* Category */}
-          <div className="form-group">
-            <label className="form-label">Feedback type</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
-              {CATEGORIES.map(c => (
-                <label key={c.value} className={`role-card ${form.category === c.value ? 'selected' : ''}`} style={{ cursor: 'pointer' }}>
-                  <input type="radio" name="category" value={c.value} checked={form.category === c.value}
-                    onChange={e => setForm(p => ({ ...p, category: e.target.value }))} style={{ display: 'none' }} />
-                  <span style={{ fontWeight: 700 }}>{c.label}</span>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{c.desc}</span>
+          {error && (
+            <div className="feedback-error" role="alert">
+              <span className="feedback-error-mark" aria-hidden="true">!</span>
+              <p>{error}</p>
+            </div>
+          )}
+
+          <fieldset className="feedback-fieldset">
+            <legend>
+              <span className="feedback-step">01</span>
+              What is your note about?
+              <span className="feedback-required" aria-hidden="true">*</span>
+            </legend>
+            <div className="feedback-categories">
+              {CATEGORIES.map((category, index) => (
+                <label
+                  className={`feedback-category ${form.category === category.value ? 'is-selected' : ''}`}
+                  key={category.value}
+                >
+                  <input
+                    type="radio"
+                    name="category"
+                    value={category.value}
+                    checked={form.category === category.value}
+                    onChange={event => updateForm('category', event.target.value)}
+                  />
+                  <span className="feedback-category-index">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="feedback-category-copy">
+                    <strong>{category.label}</strong>
+                    <small>{category.description}</small>
+                  </span>
+                  <span className="feedback-category-check" aria-hidden="true" />
                 </label>
               ))}
             </div>
-          </div>
+          </fieldset>
 
-          {/* Rating */}
-          <div className="form-group">
-            <label className="form-label">Rating</label>
-            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
-              {[1,2,3,4,5].map(n => (
-                <button key={n} type="button" onClick={() => setForm(p => ({ ...p, rating: n }))}
-                  style={{ fontSize: '2rem', background: 'none', border: 'none', cursor: 'pointer', opacity: n <= form.rating ? 1 : 0.3, transition: 'opacity 0.15s' }}>
-                  ⭐
-                </button>
+          <fieldset className="feedback-fieldset feedback-rating-field">
+            <legend>
+              <span className="feedback-step">02</span>
+              How was your experience?
+              <span className="feedback-required" aria-hidden="true">*</span>
+            </legend>
+            <div className="feedback-rating-control" role="radiogroup" aria-label="Rate your experience">
+              {[1, 2, 3, 4, 5].map(rating => (
+                <label className="feedback-rating-option" key={rating}>
+                  <input
+                    type="radio"
+                    name="rating"
+                    value={rating}
+                    checked={form.rating === rating}
+                    onChange={() => updateForm('rating', rating)}
+                    aria-label={`${rating} out of 5: ${RATING_LABELS[rating]}`}
+                  />
+                  <span aria-hidden="true">{rating}</span>
+                </label>
               ))}
-              <span style={{ color: 'var(--text-muted)', alignSelf: 'center', fontSize: '0.85rem' }}>{form.rating}/5</span>
+              <span className="feedback-rating-label" aria-live="polite">
+                {RATING_LABELS[form.rating]}
+              </span>
             </div>
+          </fieldset>
+
+          <div className="feedback-field feedback-message-field">
+            <label htmlFor="feedback-message">
+              <span className="feedback-step">03</span>
+              Tell us a little more
+              <span className="feedback-required" aria-hidden="true">*</span>
+            </label>
+            <textarea
+              id="feedback-message"
+              rows={5}
+              placeholder="What happened? What did you find helpful? What could be better?"
+              value={form.message}
+              onChange={event => updateForm('message', event.target.value)}
+              maxLength={5000}
+              required
+            />
+            <span className="feedback-character-count">{form.message.length} / 5000</span>
           </div>
 
-          {/* Message */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="feedback-message">Your message</label>
-            <textarea id="feedback-message" className="form-input form-textarea" rows={5}
-              placeholder="Tell us what you think, what could be improved, or report an issue…"
-              value={form.message} onChange={e => setForm(p => ({ ...p, message: e.target.value }))} required />
+          <div className="feedback-field feedback-diagnosis-field">
+            <label htmlFor="feedback-diagnosis">
+              <span className="feedback-step">04</span>
+              Related diagnosis ID <span className="feedback-optional">(optional)</span>
+            </label>
+            <input
+              id="feedback-diagnosis"
+              type="text"
+              maxLength={36}
+              placeholder="Add a result ID if your note is about a diagnosis"
+              value={form.diagnosis_id}
+              onChange={event => updateForm('diagnosis_id', event.target.value)}
+            />
           </div>
 
-          {/* Optional diagnosis ID */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="feedback-diag">Related diagnosis ID <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
-            <input id="feedback-diag" type="text" className="form-input" placeholder="e.g. 64abc…"
-              value={form.diagnosis_id} onChange={e => setForm(p => ({ ...p, diagnosis_id: e.target.value }))} />
+          <div className="feedback-submit-row">
+            <p>Your feedback is sent securely to our team.</p>
+            <button type="submit" className="btn btn-primary" disabled={loading} id="feedback-submit">
+              {loading ? <><span className="spinner spinner-sm" /> Sending note…</> : 'Send feedback'}
+            </button>
           </div>
-
-          <button type="submit" className="btn btn-primary w-full" style={{ padding: '0.85rem' }} disabled={loading} id="feedback-submit">
-            {loading ? <><span className="spinner spinner-sm" /> Submitting…</> : '⭐ Submit Feedback'}
-          </button>
         </form>
       </div>
-      <style>{`
-        .role-card { display: flex; flex-direction: column; gap: 2px; padding: var(--sp-3) var(--sp-4); border: 1.5px solid var(--border); border-radius: var(--r-md); background: var(--bg-input); transition: all var(--t-fast); }
-        .role-card:hover { border-color: var(--border-hover); }
-        .role-card.selected { border-color: var(--color-primary); background: rgba(34,197,94,0.08); }
-      `}</style>
-    </div>
+    </main>
   );
 }

@@ -1,127 +1,241 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import './LiveChat.css';
 
-const BOT_RESPONSES = {
-  hello: "Hello! I'm AgriBot 🌿, your agricultural assistant. I can help with plant disease questions, diagnosis guidance, and platform support. What would you like to know?",
-  diagnose: "To diagnose a plant: Go to the **Diagnose** page, upload a clear photo of the affected leaf, and click Analyze. Results appear in under 30 seconds!",
-  disease: "For disease information, check our **Plant Database** — it contains detailed info on symptoms, causes, treatment, and prevention for 38+ diseases.",
-  history: "You can view, search, and delete all your previous diagnoses in the **History** page.",
-  confidence: "The confidence score shows how certain the AI is. Scores above 80% are generally reliable. Below 60% — we recommend uploading a clearer image or consulting an expert.",
-  treatment: "Treatment recommendations are shown on your **Results** page after diagnosis. We also have detailed treatment info in the Plant Database.",
-  help: "I can help with:\n• How to diagnose a plant 🔬\n• Understanding disease results 📊\n• Treatment recommendations 💊\n• Account and navigation help 🧭\n\nWhat would you like to know?",
-  default: "I understand you're asking about plant health. For the most accurate advice, I recommend uploading a leaf image for AI diagnosis, or checking our Plant Database. Would you like guidance on either?",
-};
+const QUICK_PROMPTS = [
+  'How do I check a plant?',
+  'What does the confidence score mean?',
+  'Where can I find treatment advice?',
+];
 
-function getBotReply(msg) {
-  const lower = msg.toLowerCase();
-  if (lower.match(/hi|hello|hey/)) return BOT_RESPONSES.hello;
-  if (lower.match(/diagnos|upload|image|photo/)) return BOT_RESPONSES.diagnose;
-  if (lower.match(/disease|symptom|plant database/)) return BOT_RESPONSES.disease;
-  if (lower.match(/history|past|previous/)) return BOT_RESPONSES.history;
-  if (lower.match(/confidence|score|percent|accuracy/)) return BOT_RESPONSES.confidence;
-  if (lower.match(/treat|cure|remedy|fix/)) return BOT_RESPONSES.treatment;
-  if (lower.match(/help|support|guide/)) return BOT_RESPONSES.help;
-  return BOT_RESPONSES.default;
+const WELCOME_MESSAGE = name => ({
+  id: 'welcome',
+  from: 'assistant',
+  text: `Hello${name ? `, ${name}` : ''}. I can help you find your way around AgriDiag, understand a diagnosis, or learn how to get a clearer plant-health check. What would you like to know?`,
+  time: new Date(),
+});
+
+function getAssistantReply(message) {
+  const text = message.trim().toLowerCase();
+
+  if (/^(hi|hello|hey|good morning|good afternoon)\b/.test(text)) {
+    return 'Hello! What would you like help with today? I can explain plant checks, diagnosis results, treatment information, or your account tools.';
+  }
+  if (/\b(diagnos|upload|image|photo|picture)\b/.test(text) || /\b(check|scan)\b.*\b(plant|leaf)\b/.test(text)) {
+    return 'For a plant-health check, open Diagnose a Plant and upload a clear JPEG or PNG image of one affected leaf. Use natural light, keep the leaf in focus, and include the full affected area. The result is an AI-assisted suggestion, not a confirmed diagnosis.';
+  }
+  if (/\b(disease|symptom|plant database|plant library)\b/.test(text)) {
+    return 'The Plant Library contains plant profiles and common disease information, including symptoms, causes, treatment, and prevention. Browse it to compare what you are seeing with the available guidance.';
+  }
+  if (/\b(history|past|previous|record)\b/.test(text)) {
+    return 'Your diagnosis history keeps your previous plant checks together. Open History to search and review saved results.';
+  }
+  if (/\b(confidence|score|percent|accuracy|certain)\b/.test(text)) {
+    return 'The confidence score describes how strongly the image model matched its prediction. It is not a guarantee of accuracy. A low score can mean the image is unclear or the plant condition is outside the model’s coverage; try a sharper photo and consult an agricultural professional before making important decisions.';
+  }
+  if (/\b(treat|treatment|cure|remedy|fix|manage|preven)\b/.test(text)) {
+    return 'Open the diagnosis result or browse the Plant Library for available treatment and prevention information. Recommendations depend on the identified plant and condition. Confirm any chemical or high-impact treatment with local agricultural guidance.';
+  }
+  if (/\b(help|support|guide|what can you)\b/.test(text)) {
+    return 'I can help you navigate plant checks, diagnosis confidence, saved history, and disease information. Choose one of the suggested questions or describe what you are trying to do.';
+  }
+  return 'I can help with AgriDiag features and general plant-health guidance, but I may not know the answer to every crop question. Try the Plant Library, or run an AI-assisted check with a clear leaf photo. For urgent or high-impact decisions, speak with a qualified agricultural professional.';
+}
+
+function formatTime(date) {
+  return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function LiveChat() {
   const { user } = useAuth();
-  const [messages, setMessages] = useState([
-    { id: 1, from: 'bot', text: `Hello ${user?.name?.split(' ')[0] || 'there'}! 👋 I'm AgriBot, your agricultural assistant. How can I help you today?`, time: new Date() },
-  ]);
+  const firstName = user?.name?.trim().split(/\s+/)[0] || '';
+  const [messages, setMessages] = useState([WELCOME_MESSAGE(firstName)]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
+  const inputRef = useRef(null);
   const bottomRef = useRef(null);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, typing]);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, typing]);
 
-  const send = async () => {
-    if (!input.trim()) return;
-    const userMsg = { id: Date.now(), from: 'user', text: input, time: new Date() };
-    setMessages(m => [...m, userMsg]);
+  const sendMessage = async message => {
+    const text = message.trim();
+    if (!text || typing) return;
+
+    setMessages(current => [
+      ...current,
+      { id: `user-${Date.now()}`, from: 'user', text, time: new Date() },
+    ]);
     setInput('');
     setTyping(true);
-    await new Promise(r => setTimeout(r, 900 + Math.random() * 600));
-    const reply = getBotReply(input);
-    setMessages(m => [...m, { id: Date.now() + 1, from: 'bot', text: reply, time: new Date() }]);
+
+    await new Promise(resolve => window.setTimeout(resolve, 450));
+
+    setMessages(current => [
+      ...current,
+      {
+        id: `assistant-${Date.now()}`,
+        from: 'assistant',
+        text: getAssistantReply(text),
+        time: new Date(),
+      },
+    ]);
     setTyping(false);
+    inputRef.current?.focus();
   };
 
-  const fmtTime = d => d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  const handleSubmit = event => {
+    event.preventDefault();
+    sendMessage(input);
+  };
 
-  const QUICK = ['How do I diagnose a plant?', 'What does confidence mean?', 'Help with treatment info'];
+  const startOver = () => {
+    setMessages([WELCOME_MESSAGE(firstName)]);
+    setInput('');
+    setTyping(false);
+    inputRef.current?.focus();
+  };
 
   return (
-    <div className="page page-sm">
-      <div className="container" style={{ maxWidth: 760 }}>
-        <div className="page-hero" style={{ paddingBottom: 'var(--sp-8)' }}>
-          <span className="section-label">Support</span>
-          <h1>Live Chat</h1>
-          <p>AI-assisted agricultural support. Ask about diagnoses, plant diseases, or platform help.</p>
-        </div>
-
-        <div className="card-glass" style={{ borderRadius: 'var(--r-xl)', overflow: 'hidden' }}>
-          {/* Header */}
-          <div style={{ padding: 'var(--sp-4) var(--sp-6)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', background: 'var(--bg-card)' }}>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-dark))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🌿</div>
-            <div>
-              <div style={{ fontWeight: 700 }}>AgriBot</div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--color-primary)' }}>● AI Assistant · Online</div>
-            </div>
-            <span className="badge badge-blue" style={{ marginLeft: 'auto' }}>AI Powered</span>
+    <main className="support-page">
+      <div className="support-container">
+        <header className="support-heading">
+          <div>
+            <span className="support-kicker">GROWER SUPPORT</span>
+            <h1>Let’s figure it out.</h1>
+            <p>Quick guidance for plant health questions and using AgriDiag.</p>
           </div>
-
-          {/* Messages */}
-          <div style={{ height: 420, overflowY: 'auto', padding: 'var(--sp-5)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)', background: 'rgba(0,0,0,0.1)' }}>
-            {messages.map(m => (
-              <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: m.from === 'user' ? 'flex-end' : 'flex-start' }}>
-                <div className={`chat-bubble ${m.from}`}>{m.text}</div>
-                <div className="chat-meta">{fmtTime(m.time)}</div>
-              </div>
-            ))}
-            {typing && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
-                <div className="chat-bubble bot" style={{ padding: 'var(--sp-3) var(--sp-4)' }}>
-                  <span style={{ display: 'flex', gap: 4 }}>
-                    {[0,1,2].map(i => <span key={i} style={{ width:7,height:7,borderRadius:'50%',background:'var(--text-muted)',animation:'pulse 1.2s ease infinite',animationDelay:`${i*0.2}s`,display:'inline-block' }} />)}
-                  </span>
-                </div>
-              </div>
-            )}
-            <div ref={bottomRef} />
+          <div className="support-service-note">
+            <span className="support-availability-dot" />
+            <span>Automated guide · Available now</span>
           </div>
+        </header>
 
-          {/* Quick replies */}
-          <div style={{ padding: 'var(--sp-3) var(--sp-5)', borderTop: '1px solid var(--border)', display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', background: 'var(--bg-card)' }}>
-            {QUICK.map(q => (
-              <button key={q} className="btn btn-outline btn-sm" onClick={() => { setInput(q); }}>
-                {q}
+        <div className="support-layout">
+          <section className="conversation-panel" aria-label="AgriDiag assistant conversation">
+            <header className="conversation-header">
+              <div className="conversation-agent-mark" aria-hidden="true">A</div>
+              <div className="conversation-agent">
+                <strong>AgriDiag guide</strong>
+                <span>Answers about plant checks and the platform</span>
+              </div>
+              <button type="button" className="conversation-reset" onClick={startOver} disabled={typing}>
+                Start over
               </button>
-            ))}
-          </div>
+            </header>
 
-          {/* Input */}
-          <div style={{ padding: 'var(--sp-4) var(--sp-5)', borderTop: '1px solid var(--border)', display: 'flex', gap: 'var(--sp-3)', background: 'var(--bg-card)' }}>
-            <input
-              className="form-input"
-              style={{ flex: 1 }}
-              id="chat-input"
-              placeholder="Type your message…"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-            />
-            <button className="btn btn-primary" onClick={send} disabled={!input.trim() || typing} id="chat-send">
-              Send →
-            </button>
-          </div>
-        </div>
+            <div className="conversation-messages" aria-live="polite">
+              <div className="conversation-date-divider"><span>Today</span></div>
+              {messages.map(message => (
+                <article
+                  key={message.id}
+                  className={`conversation-message ${message.from === 'user' ? 'from-user' : 'from-assistant'}`}
+                >
+                  {message.from === 'assistant' && (
+                    <span className="conversation-message-mark" aria-hidden="true">A</span>
+                  )}
+                  <div className="conversation-message-body">
+                    {message.from === 'assistant' && (
+                      <span className="conversation-sender">AgriDiag guide</span>
+                    )}
+                    <p>{message.text}</p>
+                    <time dateTime={message.time.toISOString()}>{formatTime(message.time)}</time>
+                  </div>
+                </article>
+              ))}
+              {typing && (
+                <div className="conversation-message from-assistant" role="status" aria-label="Guide is replying">
+                  <span className="conversation-message-mark" aria-hidden="true">A</span>
+                  <div className="conversation-typing" aria-hidden="true">
+                    <span /><span /><span />
+                  </div>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
 
-        <div className="alert alert-info mt-6">
-          <span>ℹ️</span>
-          <div>AgriBot is an AI assistant. For critical crop decisions, always consult a qualified agricultural expert.</div>
+            <div className="conversation-prompts">
+              <span className="conversation-prompts-label">NOT SURE WHERE TO START?</span>
+              <div className="conversation-prompt-list">
+                {QUICK_PROMPTS.map(prompt => (
+                  <button
+                    type="button"
+                    key={prompt}
+                    className="conversation-prompt"
+                    disabled={typing}
+                    onClick={() => sendMessage(prompt)}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <form className="conversation-composer" onSubmit={handleSubmit}>
+              <label className="support-visually-hidden" htmlFor="chat-input">Message the AgriDiag guide</label>
+              <textarea
+                ref={inputRef}
+                id="chat-input"
+                rows="1"
+                maxLength={1000}
+                placeholder="Ask a question about your plants…"
+                value={input}
+                onChange={event => setInput(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    sendMessage(input);
+                  }
+                }}
+              />
+              <button
+                type="submit"
+                className="conversation-send"
+                disabled={!input.trim() || typing}
+                aria-label="Send message"
+              >
+                <span>Send</span><span aria-hidden="true">↗</span>
+              </button>
+              <span className="conversation-composer-hint">Enter to send · Shift + Enter for a new line</span>
+            </form>
+          </section>
+
+          <aside className="support-sidebar">
+            <section className="support-sidebar-card support-sidebar-intro">
+              <span className="support-kicker">HERE TO HELP</span>
+              <h2>A useful next step starts with a good question.</h2>
+              <p>
+                Get help finding the right AgriDiag tool, understanding a result, or learning
+                what information to check next.
+              </p>
+            </section>
+
+            <section className="support-sidebar-card">
+              <span className="support-kicker">EXPLORE AGRIDIAG</span>
+              <Link className="support-resource-link" to="/diagnose">
+                <span><strong>Check a plant</strong><small>Upload a leaf photo</small></span>
+                <span aria-hidden="true">↗</span>
+              </Link>
+              <Link className="support-resource-link" to="/plants">
+                <span><strong>Browse the plant library</strong><small>Symptoms and care guidance</small></span>
+                <span aria-hidden="true">↗</span>
+              </Link>
+              <Link className="support-resource-link" to="/history">
+                <span><strong>Review your history</strong><small>Return to saved results</small></span>
+                <span aria-hidden="true">↗</span>
+              </Link>
+            </section>
+
+            <p className="support-disclaimer">
+              This guide uses automated, topic-based replies and is not a live expert service.
+              AI-assisted information is not a confirmed diagnosis. Consult a qualified
+              agricultural professional about important crop decisions.
+            </p>
+          </aside>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

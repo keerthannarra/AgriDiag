@@ -1,5 +1,15 @@
-from pydantic_settings import BaseSettings
+from pathlib import Path
 from typing import List
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
+
+# Project root is two parents up from this file (server/app/config.py -> root).
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+ENV_FILE = ROOT_DIR / ".env"
+
+# Load the root .env regardless of the current working directory.
+load_dotenv(ENV_FILE)
 
 
 class Settings(BaseSettings):
@@ -37,9 +47,11 @@ class Settings(BaseSettings):
             return self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
         return self.DATABASE_URL
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(
+        env_file=str(ENV_FILE),
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+    )
 
 
 settings = Settings()

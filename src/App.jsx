@@ -19,6 +19,7 @@ import Feedback from './pages/Feedback';
 import Blog from './pages/Blog';
 import LiveChat from './pages/LiveChat';
 import DirectModel from './pages/DirectModel';
+import NotFound from './pages/NotFound';
 
 const PAGE_TITLES = {
   '/': 'Home',
@@ -78,7 +79,7 @@ export default function App() {
               </Route>
 
               {/* Fallback */}
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
           <Footer />

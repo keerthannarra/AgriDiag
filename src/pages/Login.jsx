@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getFriendlyErrorMessage, getValidationFieldErrors } from '../services/errors';
+import { validateLogin, isFormValid } from '../services/formValidation';
 import './Auth.css';
 
 export default function Login() {
@@ -18,6 +19,14 @@ export default function Login() {
 
   const handleSubmit = async event => {
     event.preventDefault();
+    if (loading) return;
+
+    const validation = validateLogin(form);
+    if (!isFormValid(validation)) {
+      setFieldErrors(validation);
+      return;
+    }
+
     setError('');
     setFieldErrors({});
     setLoading(true);

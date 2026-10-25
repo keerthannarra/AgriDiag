@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { feedbackApi } from '../services/api';
 import { getFriendlyErrorMessage } from '../services/errors';
+import { validateFeedback, isFormValid } from '../services/formValidation';
 import './Feedback.css';
 
 const CATEGORIES = [
@@ -27,27 +28,34 @@ export default function Feedback() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const updateForm = (field, value) => {
     setForm(current => ({ ...current, [field]: value }));
+    setFieldErrors(current => ({ ...current, [field]: '' }));
     if (error) setError('');
   };
 
   const handleSubmit = async event => {
     event.preventDefault();
-    const message = form.message.trim();
-    if (!message) {
-      setError('Please add a message before sending your feedback.');
+    if (loading) return;
+
+    const validation = validateFeedback(form);
+    if (!isFormValid(validation)) {
+      setFieldErrors(validation);
+      setError('Please check the highlighted fields.');
       return;
     }
 
     setLoading(true);
     setError('');
+    setFieldErrors({});
     try {
+      const message = String(form.message || '').trim();
       await feedbackApi.submit({
         ...form,
         message,
-        diagnosis_id: form.diagnosis_id.trim() || undefined,
+        diagnosis_id: String(form.diagnosis_id || '').trim() || undefined,
       });
       setSubmitted(true);
     } catch (requestError) {
@@ -180,7 +188,10 @@ export default function Feedback() {
               onChange={event => updateForm('message', event.target.value)}
               maxLength={5000}
               required
+              aria-invalid={Boolean(fieldErrors.message)}
+              aria-describedby={fieldErrors.message ? 'feedback-message-error' : undefined}
             />
+            {fieldErrors.message && <span className="feedback-field-error" id="feedback-message-error">{fieldErrors.message}</span>}
             <span className="feedback-character-count">{form.message.length} / 5000</span>
           </div>
 
@@ -196,7 +207,10 @@ export default function Feedback() {
               placeholder="Add a result ID if your note is about a diagnosis"
               value={form.diagnosis_id}
               onChange={event => updateForm('diagnosis_id', event.target.value)}
+              aria-invalid={Boolean(fieldErrors.diagnosis_id)}
+              aria-describedby={fieldErrors.diagnosis_id ? 'feedback-diagnosis-error' : undefined}
             />
+            {fieldErrors.diagnosis_id && <span className="feedback-field-error" id="feedback-diagnosis-error">{fieldErrors.diagnosis_id}</span>}
           </div>
 
           <div className="feedback-submit-row">

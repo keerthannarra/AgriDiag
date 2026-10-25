@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getFriendlyErrorMessage, getValidationFieldErrors } from '../services/errors';
+import { validateRegister, isFormValid } from '../services/formValidation';
 import './Auth.css';
 
 const ROLES = [
@@ -26,14 +27,16 @@ export default function Register() {
 
   const handleSubmit = async event => {
     event.preventDefault();
-    setError('');
-    setFieldErrors({});
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters');
-      setFieldErrors({ password: 'Use at least 6 characters.' });
+    if (loading) return;
+
+    const validation = validateRegister(form);
+    if (!isFormValid(validation)) {
+      setFieldErrors(validation);
       return;
     }
 
+    setError('');
+    setFieldErrors({});
     setLoading(true);
     try {
       await register(form.name, form.email, form.password, form.role);

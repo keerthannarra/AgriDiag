@@ -345,6 +345,15 @@
   box-shadow: 0 0 0 3px var(--color-primary-glow);
 }
 
+.feedback-field-error {
+  color: var(--error);
+  font-size: 0.75rem;
+  margin-top: var(--sp-1);
+}
+.feedback-field textarea[aria-invalid="true"],
+.feedback-field input[aria-invalid="true"] {
+  border-color: var(--error);
+}
 .feedback-character-count {
   align-self: flex-end;
   margin-top: -1.6rem;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { historyApi } from '../services/api';
+import { getFriendlyErrorMessage } from '../services/errors';
 import './History.css';
 
 const PAGE_SIZE = 100;
@@ -96,11 +97,7 @@ export default function History() {
       setTotal(response.data.total ?? response.data.count ?? 0);
     } catch (requestError) {
       if (!isCurrent()) return;
-      setError(
-        requestError.response?.data?.detail
-        || requestError.message
-        || 'We could not load your diagnosis history. Please try again.'
-      );
+      setError(getFriendlyErrorMessage(requestError, 'history'));
     } finally {
       if (isCurrent()) setLoading(false);
     }
@@ -142,11 +139,7 @@ export default function History() {
       setData(records => records.filter(record => (record.id || record._id) !== id));
       setTotal(count => Math.max(0, count - 1));
     } catch (requestError) {
-      setError(
-        requestError.response?.data?.detail
-        || requestError.message
-        || 'We could not delete this record. Please try again.'
-      );
+      setError(getFriendlyErrorMessage(requestError, 'history'));
     } finally {
       setDeleting(null);
     }

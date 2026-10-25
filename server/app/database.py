@@ -9,7 +9,11 @@ from sqlalchemy.ext.asyncio import (
 from app.config import settings
 from app.models.base import Base
 
-engine = create_async_engine(settings.ASYNC_DATABASE_URL, pool_pre_ping=True)
+engine = create_async_engine(
+    settings.ASYNC_DATABASE_URL,
+    pool_pre_ping=True,
+    hide_parameters=True,
+)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 

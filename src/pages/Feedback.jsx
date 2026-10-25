@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { feedbackApi } from '../services/api';
+import { getFriendlyErrorMessage } from '../services/errors';
 import './Feedback.css';
 
 const CATEGORIES = [
@@ -50,11 +51,7 @@ export default function Feedback() {
       });
       setSubmitted(true);
     } catch (requestError) {
-      setError(
-        requestError.response?.data?.detail
-        || requestError.message
-        || 'We could not send your feedback. Please try again.'
-      );
+      setError(getFriendlyErrorMessage(requestError, 'feedback'));
     } finally {
       setLoading(false);
     }

@@ -1,7 +1,15 @@
-import httpx
-import base64
-from typing import Optional
+import asyncio
+import io
+from functools import lru_cache
+from pathlib import Path
+import threading
+from typing import Any
+
 from app.config import settings
+from app.errors import ModelUnavailableError
+
+_model_load_lock = threading.Lock()
+BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
 # PlantVillage class label mapping — maps model output to (plant, disease, is_healthy)
@@ -44,47 +52,143 @@ DISEASE_CLASS_MAP = {
     "Tomato___Tomato_Yellow_Leaf_Curl_Virus": ("Tomato", "Yellow Leaf Curl Virus", False),
     "Tomato___Tomato_mosaic_virus": ("Tomato", "Mosaic Virus", False),
     "Tomato___healthy": ("Tomato", "Healthy", True),
+    "Apple Scab": ("Apple", "Apple Scab", False),
+    "Apple with Black Rot": ("Apple", "Black Rot", False),
+    "Cedar Apple Rust": ("Apple", "Cedar Apple Rust", False),
+    "Healthy Apple": ("Apple", "Healthy", True),
+    "Healthy Blueberry Plant": ("Blueberry", "Healthy", True),
+    "Cherry with Powdery Mildew": ("Cherry", "Powdery Mildew", False),
+    "Healthy Cherry Plant": ("Cherry", "Healthy", True),
+    "Corn (Maize) with Cercospora and Gray Leaf Spot": ("Corn", "Gray Leaf Spot", False),
+    "Corn (Maize) with Common Rust": ("Corn", "Common Rust", False),
+    "Corn (Maize) with Northern Leaf Blight": ("Corn", "Northern Leaf Blight", False),
+    "Healthy Corn (Maize) Plant": ("Corn", "Healthy", True),
+    "Grape with Black Rot": ("Grape", "Black Rot", False),
+    "Grape with Esca (Black Measles)": ("Grape", "Esca (Black Measles)", False),
+    "Grape with Isariopsis Leaf Spot": ("Grape", "Leaf Blight", False),
+    "Healthy Grape Plant": ("Grape", "Healthy", True),
+    "Orange with Citrus Greening": ("Orange", "Huanglongbing (Citrus Greening)", False),
+    "Peach with Bacterial Spot": ("Peach", "Bacterial Spot", False),
+    "Healthy Peach Plant": ("Peach", "Healthy", True),
+    "Bell Pepper with Bacterial Spot": ("Bell Pepper", "Bacterial Spot", False),
+    "Healthy Bell Pepper Plant": ("Bell Pepper", "Healthy", True),
+    "Potato with Early Blight": ("Potato", "Early Blight", False),
+    "Potato with Late Blight": ("Potato", "Late Blight", False),
+    "Healthy Potato Plant": ("Potato", "Healthy", True),
+    "Healthy Raspberry Plant": ("Raspberry", "Healthy", True),
+    "Healthy Soybean Plant": ("Soybean", "Healthy", True),
+    "Squash with Powdery Mildew": ("Squash", "Powdery Mildew", False),
+    "Strawberry with Leaf Scorch": ("Strawberry", "Leaf Scorch", False),
+    "Healthy Strawberry Plant": ("Strawberry", "Healthy", True),
+    "Tomato with Bacterial Spot": ("Tomato", "Bacterial Spot", False),
+    "Tomato with Early Blight": ("Tomato", "Early Blight", False),
+    "Tomato with Late Blight": ("Tomato", "Late Blight", False),
+    "Tomato with Leaf Mold": ("Tomato", "Leaf Mold", False),
+    "Tomato with Septoria Leaf Spot": ("Tomato", "Septoria Leaf Spot", False),
+    "Tomato with Spider Mites or Two-spotted Spider Mite": ("Tomato", "Spider Mites", False),
+    "Tomato with Target Spot": ("Tomato", "Target Spot", False),
+    "Tomato Yellow Leaf Curl Virus": ("Tomato", "Yellow Leaf Curl Virus", False),
+    "Tomato Mosaic Virus": ("Tomato", "Mosaic Virus", False),
+    "Healthy Tomato Plant": ("Tomato", "Healthy", True),
 }
 
 
-async def run_hf_inference(image_bytes: bytes) -> Optional[list]:
-    """
-    Call the Hugging Face Inference API for image classification.
-    Returns list of {label, score} dicts sorted by score descending.
-    """
-    if not settings.HF_API_TOKEN:
-        return None
+async def run_hf_inference(image_bytes: bytes) -> list[dict[str, str | float]]:
+    """Run image classification with the locally loaded Hugging Face model."""
+    return await asyncio.to_thread(_run_local_hf_inference, image_bytes)
 
-    api_url = f"https://api-inference.huggingface.co/models/{settings.HF_MODEL_NAME}"
-    headers = {"Authorization": f"Bearer {settings.HF_API_TOKEN}"}
+
+@lru_cache(maxsize=1)
+def _load_local_model(model_name: str) -> tuple[Any, Any]:
+    if not model_name.strip():
+        raise ModelUnavailableError() from ValueError("HF_MODEL_NAME is not configured")
+
+    model_dir = Path(model_name).expanduser()
+    if not model_dir.is_absolute():
+        model_dir = BACKEND_DIR / model_dir
+    model_dir = model_dir.resolve()
+
+    if not model_dir.is_dir():
+        raise ModelUnavailableError() from FileNotFoundError(
+            f"Local model directory does not exist: {model_dir}"
+        )
+
+    required_files = ["config.json", "preprocessor_config.json"]
+    missing_files = [name for name in required_files if not (model_dir / name).is_file()]
+    has_safetensors = any(
+        (model_dir / filename).is_file()
+        for filename in ("model.safetensors", "model.safetensors.index.json")
+    )
+    has_pytorch_weights = any(
+        (model_dir / filename).is_file()
+        for filename in ("pytorch_model.bin", "pytorch_model.bin.index.json")
+    )
+
+    if not has_safetensors and not has_pytorch_weights:
+        missing_files.append("model.safetensors or pytorch_model.bin")
+    if missing_files:
+        raise ModelUnavailableError() from FileNotFoundError(
+            f"Local model directory {model_dir} is missing: {', '.join(missing_files)}"
+        )
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                api_url,
-                headers=headers,
-                content=image_bytes,
-            )
-            if response.status_code == 200:
-                results = response.json()
-                # Sort by score descending
-                results.sort(key=lambda x: x.get("score", 0), reverse=True)
-                return results
-            else:
-                print(f"HuggingFace API error: {response.status_code} - {response.text}")
-                return None
-    except Exception as e:
-        print(f"HuggingFace inference error: {e}")
-        return None
+        from transformers import AutoConfig, AutoImageProcessor, AutoModelForImageClassification
+
+        model_path = str(model_dir)
+        processor = AutoImageProcessor.from_pretrained(
+            model_path,
+            local_files_only=True,
+            use_fast=False,
+        )
+        config = AutoConfig.from_pretrained(model_path, local_files_only=True)
+        model = AutoModelForImageClassification.from_pretrained(
+            model_path,
+            config=config,
+            local_files_only=True,
+            use_safetensors=has_safetensors,
+        )
+        model.eval()
+        return processor, model
+    except Exception as exc:
+        raise ModelUnavailableError() from exc
+
+
+def _run_local_hf_inference(image_bytes: bytes) -> list[dict[str, str | float]]:
+    import torch
+    from PIL import Image
+
+    with _model_load_lock:
+        processor, model = _load_local_model(settings.HF_MODEL_NAME)
+
+    with Image.open(io.BytesIO(image_bytes)) as image:
+        inputs = processor(images=image.convert("RGB"), return_tensors="pt")
+
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
+    top_probabilities, top_indices = torch.topk(
+        probabilities,
+        min(3, probabilities.shape[-1]),
+        dim=-1,
+    )
+
+    return [
+        {
+            "label": model.config.id2label[index.item()],
+            "score": probability.item(),
+        }
+        for probability, index in zip(top_probabilities[0], top_indices[0])
+    ]
 
 
 def parse_prediction(predictions: list) -> dict:
     """
-    Parse the top prediction from HuggingFace output.
+    Parse the top prediction from local model output.
     Returns normalized prediction dict.
     """
     if not predictions:
-        return _get_mock_prediction()
+        raise ValueError("The model returned no predictions.")
 
     top = predictions[0]
     label = top.get("label", "")
@@ -109,22 +213,4 @@ def parse_prediction(predictions: list) -> dict:
         "is_healthy": is_healthy,
         "is_low_confidence": confidence < settings.CONFIDENCE_THRESHOLD,
         "raw_predictions": predictions[:5],  # Top-5 only
-    }
-
-
-def _get_mock_prediction() -> dict:
-    """Mock prediction when HuggingFace API is unavailable (dev/testing)."""
-    return {
-        "label": "Tomato___Early_blight",
-        "plant": "Tomato",
-        "disease": "Early Blight",
-        "confidence": 0.9247,
-        "is_healthy": False,
-        "is_low_confidence": False,
-        "raw_predictions": [
-            {"label": "Tomato___Early_blight", "score": 0.9247},
-            {"label": "Tomato___Late_blight", "score": 0.0513},
-            {"label": "Tomato___healthy", "score": 0.0240},
-        ],
-        "_mock": True,
     }

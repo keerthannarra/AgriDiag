@@ -210,6 +210,15 @@
   font-size: 0.7rem;
 }
 
+.auth-field-error {
+  color: #a13c2e;
+  font-size: 0.75rem;
+}
+
+.auth-field > input[aria-invalid="true"] {
+  border-color: #c75b4d;
+}
+
 .auth-submit {
   width: 100%;
   min-height: 3.15rem;

@@ -29,10 +29,9 @@ async def predict(
             detail="Unsupported file type. Please upload a JPEG or PNG image.",
         )
 
-    image_bytes = await file.read()
-
     # Validate file size
     max_bytes = settings.MAX_IMAGE_SIZE_MB * 1024 * 1024
+    image_bytes = await file.read(max_bytes + 1)
     if len(image_bytes) > max_bytes:
         raise HTTPException(
             status_code=400,

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getFriendlyErrorMessage, getValidationFieldErrors } from '../services/errors';
 import './Auth.css';
 
 const ROLES = [
@@ -14,18 +15,22 @@ export default function Register() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'FARMER' });
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   const updateForm = (field, value) => {
     setForm(current => ({ ...current, [field]: value }));
+    setFieldErrors(current => ({ ...current, [field]: '' }));
     if (error) setError('');
   };
 
   const handleSubmit = async event => {
     event.preventDefault();
     setError('');
+    setFieldErrors({});
     if (form.password.length < 6) {
       setError('Password must be at least 6 characters');
+      setFieldErrors({ password: 'Use at least 6 characters.' });
       return;
     }
 
@@ -34,7 +39,8 @@ export default function Register() {
       await register(form.name, form.email, form.password, form.role);
       navigate('/dashboard');
     } catch (requestError) {
-      setError(requestError.response?.data?.detail || 'Registration failed. Please try again.');
+      setError(getFriendlyErrorMessage(requestError, 'register'));
+      setFieldErrors(getValidationFieldErrors(requestError));
     } finally {
       setLoading(false);
     }
@@ -87,7 +93,10 @@ export default function Register() {
                 onChange={event => updateForm('name', event.target.value)}
                 required
                 autoComplete="name"
+                aria-invalid={Boolean(fieldErrors.name)}
+                aria-describedby={fieldErrors.name ? 'reg-name-error' : undefined}
               />
+              {fieldErrors.name && <span className="auth-field-error" id="reg-name-error">{fieldErrors.name}</span>}
             </div>
             <div className="auth-field">
               <label htmlFor="reg-email">Email address</label>
@@ -99,7 +108,10 @@ export default function Register() {
                 onChange={event => updateForm('email', event.target.value)}
                 required
                 autoComplete="email"
+                aria-invalid={Boolean(fieldErrors.email)}
+                aria-describedby={fieldErrors.email ? 'reg-email-error' : undefined}
               />
+              {fieldErrors.email && <span className="auth-field-error" id="reg-email-error">{fieldErrors.email}</span>}
             </div>
             <div className="auth-field">
               <label htmlFor="reg-password">Password</label>
@@ -112,8 +124,14 @@ export default function Register() {
                 required
                 minLength={6}
                 autoComplete="new-password"
+                aria-invalid={Boolean(fieldErrors.password)}
+                aria-describedby={fieldErrors.password ? 'reg-password-error' : 'reg-password-hint'}
               />
-              <span className="auth-field-hint">Use at least 6 characters.</span>
+              {fieldErrors.password ? (
+                <span className="auth-field-error" id="reg-password-error">{fieldErrors.password}</span>
+              ) : (
+                <span className="auth-field-hint" id="reg-password-hint">Use at least 6 characters.</span>
+              )}
             </div>
 
             <fieldset className="auth-role-fieldset">

@@ -1,24 +1,32 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getFriendlyErrorMessage, getValidationFieldErrors } from '../services/errors';
 import './Auth.css';
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => {
+    const notice = sessionStorage.getItem('agridiag_auth_notice');
+    sessionStorage.removeItem('agridiag_auth_notice');
+    return notice || '';
+  });
+  const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async event => {
     event.preventDefault();
     setError('');
+    setFieldErrors({});
     setLoading(true);
     try {
       await login(form.email, form.password);
       navigate('/dashboard');
     } catch (requestError) {
-      setError(requestError.response?.data?.detail || 'Invalid email or password');
+      setError(getFriendlyErrorMessage(requestError, 'login'));
+      setFieldErrors(getValidationFieldErrors(requestError));
     } finally {
       setLoading(false);
     }
@@ -68,10 +76,16 @@ export default function Login() {
                 type="email"
                 placeholder="you@example.com"
                 value={form.email}
-                onChange={event => setForm(current => ({ ...current, email: event.target.value }))}
+                onChange={event => {
+                  setForm(current => ({ ...current, email: event.target.value }));
+                  setFieldErrors(current => ({ ...current, email: '' }));
+                }}
                 required
                 autoComplete="email"
+                aria-invalid={Boolean(fieldErrors.email)}
+                aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
               />
+              {fieldErrors.email && <span className="auth-field-error" id="login-email-error">{fieldErrors.email}</span>}
             </div>
             <div className="auth-field">
               <label htmlFor="login-password">Password</label>
@@ -80,10 +94,16 @@ export default function Login() {
                 type="password"
                 placeholder="Enter your password"
                 value={form.password}
-                onChange={event => setForm(current => ({ ...current, password: event.target.value }))}
+                onChange={event => {
+                  setForm(current => ({ ...current, password: event.target.value }));
+                  setFieldErrors(current => ({ ...current, password: '' }));
+                }}
                 required
                 autoComplete="current-password"
+                aria-invalid={Boolean(fieldErrors.password)}
+                aria-describedby={fieldErrors.password ? 'login-password-error' : undefined}
               />
+              {fieldErrors.password && <span className="auth-field-error" id="login-password-error">{fieldErrors.password}</span>}
             </div>
             <button type="submit" className="btn btn-primary auth-submit" disabled={loading} id="login-submit">
               {loading ? <><span className="spinner spinner-sm" /> Signing in…</> : 'Sign in'}

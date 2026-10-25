@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.errors import DiagnosisFailedError, ModelUnavailableError
 from app.ml.inference import run_hf_inference, parse_prediction
 from app.ml.preprocessing import preprocess_image, save_upload, validate_image
 from app.models.diagnosis import Diagnosis
@@ -63,7 +64,7 @@ async def process_diagnosis(
     1. Validate image
     2. Save original upload
     3. Preprocess for inference
-    4. Run HuggingFace inference
+    4. Run local Transformers inference
     5. Parse prediction
     6. Enrich with disease info from DB or fallback
     7. Save to PostgreSQL
@@ -79,10 +80,18 @@ async def process_diagnosis(
     processed = preprocess_image(image_bytes)
 
     # Step 4: Run inference
-    raw_predictions = await run_hf_inference(processed)
+    try:
+        raw_predictions = await run_hf_inference(processed)
+    except ModelUnavailableError:
+        raise
+    except Exception as exc:
+        raise DiagnosisFailedError() from exc
 
     # Step 5: Parse
-    prediction = parse_prediction(raw_predictions)
+    try:
+        prediction = parse_prediction(raw_predictions)
+    except (TypeError, ValueError, KeyError) as exc:
+        raise DiagnosisFailedError() from exc
 
     # Step 6: Enrich with disease info
     disease_info = await _get_disease_info(prediction["disease"], session)

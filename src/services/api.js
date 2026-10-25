@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { createMalformedResponseError, getFriendlyErrorMessage } from './errors';
 
 const api = axios.create({
   baseURL: '/api',
@@ -15,16 +16,33 @@ api.interceptors.request.use(config => {
 
 // Response interceptor: handle 401
 api.interceptors.response.use(
-  res => res,
+  res => {
+    const contentType = res.headers['content-type'] || '';
+    if (res.status !== 204 && (
+      !contentType.includes('application/json')
+      || !res.data
+      || typeof res.data !== 'object'
+      || Array.isArray(res.data)
+    )) {
+      return Promise.reject(createMalformedResponseError());
+    }
+    return res;
+  },
   err => {
-    const isAuthCheck = err.config?.url?.includes('/auth/me');
-    if (err.response?.status === 401 && (isAuthCheck || !localStorage.getItem('agridiag_token'))) {
+    const url = err.config?.url || '';
+    const hasToken = Boolean(localStorage.getItem('agridiag_token'));
+    if (err.response?.status === 401 && hasToken && !url.includes('/auth/login')) {
       localStorage.removeItem('agridiag_token');
       delete api.defaults.headers.common['Authorization'];
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      if (url.includes('/auth/me')) {
+        sessionStorage.setItem('agridiag_auth_notice', 'Your session has expired. Please sign in again.');
+      } else if (window.location.pathname !== '/login') {
+        sessionStorage.setItem('agridiag_auth_notice', 'Your session has expired. Please sign in again.');
+        window.location.assign('/login');
       }
     }
+    err.userMessage = getFriendlyErrorMessage(err);
+    err.message = err.userMessage;
     return Promise.reject(err);
   }
 );

@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './Diagnose.css';
 import { diagnosisApi } from '../services/api';
+import { getFriendlyErrorMessage } from '../services/errors';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -50,8 +51,8 @@ export default function Diagnose() {
     try {
       const preview = await readFilePreview(file);
       setImage({ file, preview });
-    } catch (readError) {
-      setError(readError.message);
+    } catch {
+      setError("We couldn't read this image. Please choose a different file.");
     }
   }, []);
 
@@ -78,15 +79,12 @@ export default function Diagnose() {
       const response = await diagnosisApi.predict(formData);
       const id = response.data.id;
       if (!id) {
-        throw new Error('The diagnosis completed without a result ID. Please try again.');
+        setError("We couldn't complete the plant analysis. Please try again.");
+        return;
       }
       navigate(`/results/${id}`, { state: { diagnosis: response.data } });
     } catch (requestError) {
-      setError(
-        requestError.response?.data?.detail
-          || requestError.message
-          || 'We could not analyze this image. Please try again.'
-      );
+      setError(getFriendlyErrorMessage(requestError, 'diagnosis'));
     } finally {
       setLoading(false);
       setProgress('');

@@ -25,8 +25,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS_STR: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
 
     # Hugging Face
-    HF_API_TOKEN: str = ""
-    HF_MODEL_NAME: str = "linkanjarad/plant-disease-EfficientNet-B3"
+    HF_MODEL_NAME: str = ""
 
     # ML Config
     CONFIDENCE_THRESHOLD: float = 0.60

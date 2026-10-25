@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { diagnosisApi } from '../services/api';
+import { getFriendlyErrorMessage } from '../services/errors';
 import './Results.css';
 
 const RECOMMENDATION_TABS = [
@@ -92,11 +93,7 @@ export default function Results() {
       })
       .catch(requestError => {
         if (!isCurrent) return;
-        setError(
-          requestError.response?.data?.detail
-          || requestError.message
-          || 'We could not load this diagnosis. Please try again.'
-        );
+        setError(getFriendlyErrorMessage(requestError, 'results'));
       })
       .finally(() => {
         if (isCurrent) setLoading(false);

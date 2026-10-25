@@ -1,11 +1,24 @@
 from contextlib import asynccontextmanager
+from uuid import uuid4
+
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
+from sqlalchemy.exc import SQLAlchemyError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
 from app.database import close_db, init_db
+from app.errors import (
+    AgriDiagError,
+    agridiag_error_handler,
+    database_error_handler,
+    http_error_handler,
+    unexpected_error_handler,
+    validation_error_handler,
+)
 from app.routers import auth, diagnosis, history, plants, feedback
 
 
@@ -29,6 +42,22 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+
+@app.middleware("http")
+async def request_id_middleware(request, call_next):
+    request_id = str(uuid4())
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+app.add_exception_handler(AgriDiagError, agridiag_error_handler)
+app.add_exception_handler(RequestValidationError, validation_error_handler)
+app.add_exception_handler(StarletteHTTPException, http_error_handler)
+app.add_exception_handler(SQLAlchemyError, database_error_handler)
+app.add_exception_handler(Exception, unexpected_error_handler)
 
 # CORS
 app.add_middleware(

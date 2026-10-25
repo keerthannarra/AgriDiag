@@ -1,5 +1,8 @@
 from PIL import Image
+from PIL import UnidentifiedImageError
 import io
+
+from app.errors import InvalidImageError, UnsupportedImageError
 
 
 # Standard preprocessing config matching PlantVillage CNN training
@@ -10,18 +13,22 @@ SUPPORTED_FORMATS = {"JPEG", "PNG", "JPG"}
 def validate_image(image_bytes: bytes) -> Image.Image:
     """
     Validate that image_bytes is a real, readable image.
-    Raises ValueError if invalid.
+    Raises a safe AgriDiag image error if the file is invalid or unsupported.
     """
     try:
         img = Image.open(io.BytesIO(image_bytes))
-        img.verify()  # Verify integrity
-        # Re-open (verify closes the file)
-        img = Image.open(io.BytesIO(image_bytes))
-        if img.format not in SUPPORTED_FORMATS:
-            raise ValueError(f"Unsupported format: {img.format}. Supported: {SUPPORTED_FORMATS}")
-        return img
-    except Exception as e:
-        raise ValueError(f"Invalid or corrupted image: {e}")
+        image_format = img.format
+        img.verify()
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError, Image.DecompressionBombError) as exc:
+        raise InvalidImageError() from exc
+
+    if image_format not in SUPPORTED_FORMATS:
+        raise UnsupportedImageError()
+
+    try:
+        return Image.open(io.BytesIO(image_bytes))
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError, Image.DecompressionBombError) as exc:
+        raise InvalidImageError() from exc
 
 
 def preprocess_image(image_bytes: bytes) -> bytes:

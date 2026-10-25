@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { diagnosisApi } from '../services/api';
+import { getFriendlyErrorMessage } from '../services/errors';
 
 export default function DirectModel() {
   const fileRef = useRef(null);
@@ -11,11 +12,33 @@ export default function DirectModel() {
 
   const loadFile = file => {
     if (!file) return;
-    if (!['image/jpeg', 'image/jpg', 'image/png'].includes(file.type)) { setError('JPEG/PNG only'); return; }
+    if (!['image/jpeg', 'image/jpg', 'image/png'].includes(file.type)) {
+      setError("This file type isn't supported. Please upload a JPEG or PNG image.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError('This file is too large. Please choose a smaller file.');
+      return;
+    }
+    if (file.size === 0) {
+      setError("We couldn't read this image. Please choose a different file.");
+      return;
+    }
     setError(''); setResult(null);
     const r = new FileReader();
-    r.onload = e => setImage({ file, preview: e.target.result });
-    r.readAsDataURL(file);
+    r.onload = event => {
+      if (typeof event.target.result === 'string') {
+        setImage({ file, preview: event.target.result });
+      } else {
+        setError("We couldn't read this image. Please choose a different file.");
+      }
+    };
+    r.onerror = () => setError("We couldn't read this image. Please choose a different file.");
+    try {
+      r.readAsDataURL(file);
+    } catch {
+      setError("We couldn't read this image. Please choose a different file.");
+    }
   };
 
   const handleSubmit = async () => {
@@ -27,7 +50,7 @@ export default function DirectModel() {
       const res = await diagnosisApi.predict(fd);
       setResult(res.data);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Inference failed.');
+      setError(getFriendlyErrorMessage(err, 'diagnosis'));
     } finally { setLoading(false); }
   };
 

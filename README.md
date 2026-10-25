@@ -30,7 +30,7 @@ PostgreSQL Hugging Face CNN Model
 | Backend | Python 3.11 + FastAPI |
 | Database | PostgreSQL + SQLAlchemy (async) |
 | Auth | JWT (python-jose) + passlib[bcrypt] |
-| ML Inference | Hugging Face Inference API |
+| ML Inference | Hugging Face Transformers + PyTorch (local) |
 | Image Processing | Pillow |
 
 ---
@@ -83,7 +83,7 @@ docker compose up -d db
 ```
 
 The app's development database URL matches this container by default. To use a
-different or hosted PostgreSQL instance, set `DATABASE_URL` in `server/.env`.
+different or hosted PostgreSQL instance, set `DATABASE_URL` in the repository-root `.env`.
 The Compose credentials are for local development only.
 
 ```bash
@@ -96,7 +96,8 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 
-# Create .env and configure your PostgreSQL URL, JWT secret, and HuggingFace token
+# Create the repository-root .env and configure your PostgreSQL URL and JWT secret.
+# Set HF_MODEL_NAME to the directory containing your locally installed model files.
 # DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/agridiag
 
 # Seed the database with plant/disease data
@@ -152,14 +153,23 @@ Frontend available at: http://localhost:5173
 
 ## 🤗 Hugging Face Model
 
-By default, AgriDiag uses the HuggingFace Inference API. Configure your model in `.env`:
+AgriDiag loads the Transformers model exclusively from a local directory. It
+does not download model files at runtime. Set `HF_MODEL_NAME` in the
+repository-root `.env` to the directory containing the model files:
 
 ```env
-HF_MODEL_NAME=linkanjarad/plant-disease-EfficientNet-B3
-HF_API_TOKEN=hf_your_token_here
+HF_MODEL_NAME=/absolute/path/to/your/local/model-directory
 ```
 
-The model should be compatible with image classification and trained on PlantVillage dataset classes.
+Replace the example with the actual model directory on your machine. The path
+can be absolute or relative to `server/`. The directory must contain
+`config.json`, `preprocessor_config.json`, and model weights (`model.safetensors`
+or `pytorch_model.bin`). Safetensors are preferred. Hugging Face repository IDs
+are not local paths and are rejected. Model weights are not included in this
+repository; predictions will report the missing local directory or files until
+you provide a complete model directory. With the current PyTorch 2.2 setup,
+use `model.safetensors`; newer Transformers versions block loading legacy
+`.bin` weights with older PyTorch versions.
 
 ---
 

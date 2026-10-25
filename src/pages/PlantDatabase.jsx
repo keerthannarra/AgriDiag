@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { plantsApi } from '../services/api';
+import { getFriendlyErrorMessage } from '../services/errors';
 import './PlantDatabase.css';
 
 const LIBRARY_TABS = [
@@ -80,10 +81,7 @@ export default function PlantDatabase() {
         if (!query) setTotals(current => ({ ...current, diseases: response.data.total ?? data.length }));
       }
     } catch (requestError) {
-      setError(
-        requestError.response?.data?.detail
-          || 'We could not load the library. Check your connection and try again.'
-      );
+      setError(getFriendlyErrorMessage(requestError, 'library'));
     } finally {
       setLoading(false);
     }
@@ -107,10 +105,7 @@ export default function PlantDatabase() {
           diseases: diseaseResponse.data.total ?? diseaseData.length,
         });
       } catch (requestError) {
-        setError(
-          requestError.response?.data?.detail
-            || 'We could not load the library. Check your connection and try again.'
-        );
+        setError(getFriendlyErrorMessage(requestError, 'library'));
       } finally {
         setLoading(false);
       }

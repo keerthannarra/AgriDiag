@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { historyApi } from '../services/api';
+import { getFriendlyErrorMessage } from '../services/errors';
 import './Dashboard.css';
 
 const ROLE_COPY = {
@@ -46,10 +47,7 @@ export default function Dashboard() {
       setRecent(records);
       setTotal(response.data.total || 0);
     } catch (requestError) {
-      setError(
-        requestError.response?.data?.detail
-          || 'We could not load your dashboard. Check your connection and try again.'
-      );
+      setError(getFriendlyErrorMessage(requestError, 'dashboard'));
     } finally {
       setLoading(false);
     }
